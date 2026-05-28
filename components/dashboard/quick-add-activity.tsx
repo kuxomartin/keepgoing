@@ -88,7 +88,7 @@ export function QuickAddActivity({ onSuccess }: { onSuccess?: () => void }) {
             onChange={(e) => setActivityType(e.target.value)}
             options={TYPE_OPTIONS}
           />
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input
               id="act-duration"
               type="number"
@@ -120,11 +120,11 @@ export function QuickAddActivity({ onSuccess }: { onSuccess?: () => void }) {
               max="10"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Button type="submit" size="sm" disabled={loading}>
-              {loading ? 'Saving…' : 'Save'}
+          <div className="space-y-2">
+            <Button type="submit" size="md" className="w-full sm:w-auto" disabled={loading}>
+              {loading ? 'Saving…' : 'Save activity'}
             </Button>
-            {message && <span className="text-xs text-green-600">{message}</span>}
+            {message && <p className="text-sm text-green-600">{message}</p>}
           </div>
         </form>
       </CardContent>

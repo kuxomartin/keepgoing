@@ -103,11 +103,11 @@ export function QuickAddFood({ onSuccess }: { onSuccess?: () => void }) {
               step="0.5"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Button type="submit" size="sm" disabled={loading}>
-              {loading ? 'Saving…' : 'Save'}
+          <div className="space-y-2">
+            <Button type="submit" size="md" className="w-full sm:w-auto" disabled={loading}>
+              {loading ? 'Saving…' : 'Save meal'}
             </Button>
-            {message && <span className="text-xs text-green-600">{message}</span>}
+            {message && <p className="text-sm text-green-600">{message}</p>}
           </div>
         </form>
       </CardContent>

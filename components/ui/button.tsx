@@ -19,9 +19,9 @@ export function Button({
         variant === 'secondary' && 'bg-gray-100 text-gray-700 hover:bg-gray-200',
         variant === 'ghost' && 'text-gray-600 hover:bg-gray-100',
         variant === 'destructive' && 'bg-red-600 text-white hover:bg-red-700',
-        size === 'sm' && 'px-3 py-1.5 text-xs',
-        size === 'md' && 'px-4 py-2 text-sm',
-        size === 'lg' && 'px-5 py-2.5 text-sm',
+        size === 'sm' && 'px-4 py-2 text-sm',
+        size === 'md' && 'px-4 py-2.5 text-sm',
+        size === 'lg' && 'px-6 py-3 text-base',
         className
       )}
       {...props}

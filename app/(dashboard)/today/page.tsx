@@ -12,6 +12,7 @@ import { getRecoveryScore } from '@/lib/calculations/recovery-score'
 import { mockHealthMetrics, mockWeightLogs } from '@/lib/mock-data/demo-data'
 import type { HealthMetrics, WeightLog } from '@/types/database'
 import { Scale, Moon, Heart, Zap } from 'lucide-react'
+import { QuickActionsPanel } from '@/components/dashboard/quick-actions-panel'
 
 export default async function TodayPage() {
   const supabase = await createClient()
@@ -101,11 +102,14 @@ export default async function TodayPage() {
       {/* Recommendation */}
       <RecommendationCard recovery={recovery} />
 
+      {/* Mobile: quick action strip (hidden on desktop) */}
+      <QuickActionsPanel />
+
       {/* Daily check-in */}
       <DailyCheckinForm />
 
-      {/* Quick-add forms */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Desktop: quick-add cards (hidden on mobile — handled by QuickActionsPanel) */}
+      <div className="hidden lg:grid grid-cols-3 gap-4">
         <QuickAddWeight />
         <QuickAddFood />
         <QuickAddActivity />

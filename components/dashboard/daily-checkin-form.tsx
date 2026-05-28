@@ -83,7 +83,7 @@ export function DailyCheckinForm({ onSuccess }: { onSuccess?: () => void }) {
                 max={10}
                 value={scores[key]}
                 onChange={(e) => handleSlider(key, parseInt(e.target.value))}
-                className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-blue-600"
+                className="w-full h-3 bg-gray-200 rounded-full appearance-none cursor-pointer accent-blue-600"
               />
               <div className="flex justify-between text-xs text-gray-400">
                 <span>{low}</span>
@@ -99,16 +99,16 @@ export function DailyCheckinForm({ onSuccess }: { onSuccess?: () => void }) {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="How do you feel today? Anything notable?"
               rows={2}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 resize-none"
+              className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 resize-none"
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button type="submit" size="sm" disabled={loading}>
+          <div className="space-y-2">
+            <Button type="submit" size="md" className="w-full sm:w-auto" disabled={loading}>
               {loading ? 'Saving…' : 'Submit check-in'}
             </Button>
             {message && (
-              <span className="text-xs text-green-600 font-medium">{message}</span>
+              <p className="text-sm text-green-600 font-medium">{message}</p>
             )}
           </div>
         </form>
