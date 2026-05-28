@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { Plus, Pencil } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { mockFoodLogs } from '@/lib/mock-data/demo-data'
@@ -18,6 +18,13 @@ interface PageProps {
   searchParams: Promise<{ date?: string }>
 }
 
+function fmtTime(log: FoodLog): string | null {
+  if (log.eaten_at) {
+    try { return format(new Date(log.eaten_at), 'HH:mm') } catch { return null }
+  }
+  return null
+}
+
 export default async function FoodPage({ searchParams }: PageProps) {
   const { date: dateParam } = await searchParams
   const selectedDate = dateParam || format(new Date(), 'yyyy-MM-dd')
@@ -28,7 +35,8 @@ export default async function FoodPage({ searchParams }: PageProps) {
     .from('food_logs')
     .select('*')
     .eq('date', selectedDate)
-    .order('created_at', { ascending: true })
+    .order('eaten_at', { ascending: true })    // sort by exact time
+    .order('created_at', { ascending: true })  // fallback
 
   const isUsingMock = !rawLogs || rawLogs.length === 0
 
@@ -37,13 +45,12 @@ export default async function FoodPage({ searchParams }: PageProps) {
       ? (rawLogs as FoodLog[])
       : mockFoodLogs.filter((f) => f.date === selectedDate || selectedDate === format(new Date(), 'yyyy-MM-dd'))
 
-  // Daily totals
   const totalCalories = logs.reduce((sum, f) => sum + (f.estimated_calories ?? 0), 0)
-  const totalProtein = logs.reduce((sum, f) => sum + (f.protein_g ?? 0), 0)
-  const totalCarbs = logs.reduce((sum, f) => sum + (f.carbs_g ?? 0), 0)
-  const totalFat = logs.reduce((sum, f) => sum + (f.fat_g ?? 0), 0)
+  const totalProtein  = logs.reduce((sum, f) => sum + (f.protein_g ?? 0), 0)
+  const totalCarbs    = logs.reduce((sum, f) => sum + (f.carbs_g ?? 0), 0)
+  const totalFat      = logs.reduce((sum, f) => sum + (f.fat_g ?? 0), 0)
 
-  // Group by meal type
+  // Group by meal type (order preserved by MEAL_ORDER)
   const grouped = MEAL_ORDER.reduce((acc, meal) => {
     const items = logs.filter((f) => f.meal_type === meal)
     if (items.length > 0) acc[meal] = items
@@ -52,6 +59,7 @@ export default async function FoodPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Food Log</h1>
@@ -71,7 +79,7 @@ export default async function FoodPage({ searchParams }: PageProps) {
       </div>
 
       {/* Date picker */}
-      <form className="flex items-center gap-3">
+      <form className="flex items-center gap-3 flex-wrap">
         <input
           type="date"
           name="date"
@@ -89,12 +97,10 @@ export default async function FoodPage({ searchParams }: PageProps) {
         </span>
       </form>
 
-      {/* Daily summary */}
+      {/* Daily totals */}
       {logs.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Daily total</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Daily total</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-4 gap-3 text-center">
               <div>
@@ -121,58 +127,84 @@ export default async function FoodPage({ searchParams }: PageProps) {
       {/* Meals */}
       {Object.keys(grouped).length === 0 ? (
         <Card>
-          <CardContent className="py-8 text-center text-sm text-gray-400">
-            No food logged for this day yet.
+          <CardContent className="py-10 text-center space-y-3">
+            <p className="text-sm text-gray-400">No food logged for this day yet.</p>
+            <Link href="/food/add"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add first meal
+            </Link>
           </CardContent>
         </Card>
       ) : (
-        Object.entries(grouped).map(([meal, items]) => (
-          <Card key={meal}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>{MEAL_LABELS[meal as MealType]}</CardTitle>
-                <span className="text-xs text-gray-400">
-                  {items.reduce((s, f) => s + (f.estimated_calories ?? 0), 0)} kcal
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <ul className="divide-y divide-gray-100">
-                {items.map((f) => (
-                  <li key={f.id} className="px-5 py-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900">{f.description}</p>
-                        {(f.protein_g || f.carbs_g || f.fat_g) && (
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            {f.protein_g ? `P: ${f.protein_g}g ` : ''}
-                            {f.carbs_g ? `C: ${f.carbs_g}g ` : ''}
-                            {f.fat_g ? `F: ${f.fat_g}g` : ''}
-                          </p>
-                        )}
-                        {f.digestion_note && (
-                          <p className="text-xs text-gray-400 italic mt-0.5">{f.digestion_note}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {f.confidence && (
-                          <Badge variant={f.confidence === 'high' ? 'green' : f.confidence === 'medium' ? 'yellow' : 'default'}>
-                            {f.confidence}
-                          </Badge>
-                        )}
-                        {f.estimated_calories && (
-                          <span className="text-sm font-medium text-gray-700">{f.estimated_calories} kcal</span>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        ))
+        MEAL_ORDER.filter(meal => grouped[meal]).map(meal => {
+          const items = grouped[meal]!
+          return (
+            <Card key={meal}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>{MEAL_LABELS[meal]}</CardTitle>
+                  <span className="text-xs text-gray-400">
+                    {items.reduce((s, f) => s + (f.estimated_calories ?? 0), 0)} kcal
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ul className="divide-y divide-gray-100">
+                  {items.map((f) => {
+                    const timeStr = fmtTime(f)
+                    return (
+                      <li key={f.id} className="px-5 py-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              {timeStr && (
+                                <span className="text-xs text-gray-400 font-mono flex-shrink-0">{timeStr}</span>
+                              )}
+                              <p className="text-sm text-gray-900 truncate">{f.description}</p>
+                            </div>
+                            {(f.protein_g || f.carbs_g || f.fat_g) && (
+                              <p className="text-xs text-gray-400 mt-0.5 ml-0">
+                                {f.protein_g ? `P:${f.protein_g}g ` : ''}
+                                {f.carbs_g   ? `C:${f.carbs_g}g `  : ''}
+                                {f.fat_g     ? `F:${f.fat_g}g`     : ''}
+                              </p>
+                            )}
+                            {f.digestion_note && (
+                              <p className="text-xs text-gray-400 italic mt-0.5">{f.digestion_note}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {f.confidence && (
+                              <Badge variant={f.confidence === 'high' ? 'green' : f.confidence === 'medium' ? 'yellow' : 'default'}>
+                                {f.confidence}
+                              </Badge>
+                            )}
+                            {f.estimated_calories ? (
+                              <span className="text-sm font-medium text-gray-700">{f.estimated_calories} kcal</span>
+                            ) : null}
+                            {/* Edit link — only for real rows (not mock) */}
+                            {!isUsingMock && (
+                              <Link
+                                href={`/food/${f.id}/edit`}
+                                className="p-1.5 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </CardContent>
+            </Card>
+          )
+        })
       )}
-
     </div>
   )
 }

@@ -44,6 +44,8 @@ export interface FoodLog {
   id: string
   user_id: string
   date: string
+  /** ISO timestamp of when the meal was eaten (migration 007) */
+  eaten_at: string | null
   meal_type: MealType
   description: string
   estimated_calories: number | null
