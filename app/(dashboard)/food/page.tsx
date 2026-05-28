@@ -77,9 +77,6 @@ export default async function FoodPage({ searchParams }: PageProps) {
           name="date"
           defaultValue={selectedDate}
           className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          onChange={(e) => {
-            // Will be handled as a form submit when navigating
-          }}
         />
         <button
           type="submit"
