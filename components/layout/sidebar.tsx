@@ -11,18 +11,20 @@ import {
   Brain,
   Settings,
   LogOut,
+  Flame,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
-  { href: '/today', label: 'Today', icon: LayoutDashboard },
-  { href: '/activities', label: 'Activities', icon: Activity },
-  { href: '/food', label: 'Food Log', icon: Utensils },
-  { href: '/weight', label: 'Weight', icon: Scale },
-  { href: '/recovery', label: 'Recovery', icon: Heart },
-  { href: '/coach', label: 'Coach', icon: Brain },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/today',     label: 'Today',      icon: LayoutDashboard },
+  { href: '/activities',label: 'Activities', icon: Activity },
+  { href: '/food',      label: 'Food Log',   icon: Utensils },
+  { href: '/nutrition', label: 'Nutrition',  icon: Flame },
+  { href: '/weight',    label: 'Weight',     icon: Scale },
+  { href: '/recovery',  label: 'Recovery',   icon: Heart },
+  { href: '/coach',     label: 'Coach',      icon: Brain },
+  { href: '/settings',  label: 'Settings',   icon: Settings },
 ]
 
 export function Sidebar() {

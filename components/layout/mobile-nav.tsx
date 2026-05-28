@@ -2,13 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Activity, Utensils, Heart, Settings } from 'lucide-react'
+import { LayoutDashboard, Utensils, Flame, Heart, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const mobileNavItems = [
   { href: '/today',      label: 'Today',      icon: LayoutDashboard },
-  { href: '/activities', label: 'Activities', icon: Activity },
   { href: '/food',       label: 'Food',       icon: Utensils },
+  { href: '/nutrition',  label: 'Nutrition',  icon: Flame },
   { href: '/recovery',   label: 'Recovery',   icon: Heart },
   { href: '/settings',   label: 'Settings',   icon: Settings },
 ]

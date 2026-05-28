@@ -14,6 +14,7 @@ import type { HealthMetrics, WeightLog } from '@/types/database'
 import Link from 'next/link'
 import { Scale, Moon, Heart, Zap, UtensilsCrossed } from 'lucide-react'
 import { QuickActionsPanel } from '@/components/dashboard/quick-actions-panel'
+import { CalorieBalanceCard } from '@/components/nutrition/calorie-balance-card'
 
 export default async function TodayPage() {
   const supabase = await createClient()
@@ -21,7 +22,7 @@ export default async function TodayPage() {
   const longDate = format(new Date(), 'EEEE, d MMMM yyyy')
 
   // Fetch real data
-  const [{ data: metricsRaw }, { data: weightsRaw }] = await Promise.all([
+  const [{ data: metricsRaw }, { data: weightsRaw }, { data: foodRaw }] = await Promise.all([
     supabase
       .from('health_metrics')
       .select('*')
@@ -33,6 +34,10 @@ export default async function TodayPage() {
       .select('*')
       .order('date', { ascending: false })
       .limit(1),
+    supabase
+      .from('food_logs')
+      .select('estimated_calories')
+      .eq('date', today),
   ])
 
   // Fallback to mock
@@ -47,6 +52,13 @@ export default async function TodayPage() {
       : mockWeightLogs[0]
 
   const recovery = getRecoveryScore(todayMetrics)
+
+  // Calorie balance
+  const consumedToday = foodRaw?.length
+    ? foodRaw.reduce((sum, f) => sum + (f.estimated_calories ?? 0), 0)
+    : null
+  const activeEnergy  = todayMetrics?.active_energy_kcal   ?? null
+  const restingEnergy = todayMetrics?.resting_energy_kcal  ?? null
 
   const sleepHours = todayMetrics?.sleep_minutes
     ? (todayMetrics.sleep_minutes / 60).toFixed(1)
@@ -102,6 +114,13 @@ export default async function TodayPage() {
 
       {/* Recommendation */}
       <RecommendationCard recovery={recovery} />
+
+      {/* Calorie Balance */}
+      <CalorieBalanceCard
+        consumed={consumedToday}
+        activeEnergy={activeEnergy}
+        restingEnergy={restingEnergy}
+      />
 
       {/* Mobile: prominent "Add Meal" shortcut + quick action strip */}
       <Link

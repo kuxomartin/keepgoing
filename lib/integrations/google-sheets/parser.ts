@@ -243,6 +243,7 @@ export function parseHealthMetricsRows(
       vo2max:              parseNum(row[columnMap['vo2max']]),
       steps:               parseInt2(row[columnMap['steps']]),
       active_energy_kcal:  parseInt2(row[columnMap['active_energy_kcal']]),
+      resting_energy_kcal: parseInt2(row[columnMap['resting_energy_kcal']]),
       respiratory_rate:    parseNum(row[columnMap['respiratory_rate']]),
       source_payload:      null,
     }

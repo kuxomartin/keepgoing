@@ -31,6 +31,11 @@ export const HEALTH_METRICS_ALIASES: Record<string, string[]> = {
     'active_energy_kcal', 'active_calories', 'Active Energy (kcal)', 'Active Calories',
     'active energy', 'ActiveEnergy', 'active_energy', 'calories_burned', 'Calories Burned',
   ],
+  resting_energy_kcal: [
+    'resting_energy_kcal', 'resting_calories', 'Resting Energy (kcal)', 'Resting Calories',
+    'resting energy', 'RestingEnergy', 'resting_energy', 'basal_energy', 'Basal Energy',
+    'bmr', 'BMR', 'basal metabolic rate', 'Basal Metabolic Rate',
+  ],
   respiratory_rate: [
     'respiratory_rate', 'Respiratory Rate', 'resp_rate', 'breathing_rate', 'Breathing Rate',
     'breaths_per_min', 'Breaths/min',

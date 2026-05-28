@@ -93,6 +93,8 @@ export interface HealthMetrics {
   vo2max: number | null
   steps: number | null
   active_energy_kcal: number | null
+  /** Resting / basal metabolic energy expenditure (migration 008) */
+  resting_energy_kcal: number | null
   respiratory_rate: number | null
   source: string
   source_payload: Record<string, unknown> | null
