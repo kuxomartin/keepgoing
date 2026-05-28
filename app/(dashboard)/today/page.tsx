@@ -22,7 +22,7 @@ export default async function TodayPage() {
   const longDate = format(new Date(), 'EEEE, d MMMM yyyy')
 
   // Fetch real data
-  const [{ data: metricsRaw }, { data: weightsRaw }, { data: foodRaw }] = await Promise.all([
+  const [{ data: metricsRaw }, { data: weightsRaw }, { data: foodRaw }, { data: recentEnergyRaw }] = await Promise.all([
     supabase
       .from('health_metrics')
       .select('*')
@@ -38,6 +38,13 @@ export default async function TodayPage() {
       .from('food_logs')
       .select('estimated_calories')
       .eq('date', today),
+    // Most-recent row with actual energy data — fallback for calorie card when today has no metrics
+    supabase
+      .from('health_metrics')
+      .select('date, active_energy_kcal, resting_energy_kcal')
+      .not('active_energy_kcal', 'is', null)
+      .order('date', { ascending: false })
+      .limit(1),
   ])
 
   // Fallback to mock
@@ -53,12 +60,18 @@ export default async function TodayPage() {
 
   const recovery = getRecoveryScore(todayMetrics)
 
-  // Calorie balance
+  // Calorie balance — use today's metrics first, fall back to most-recent-with-energy
   const consumedToday = foodRaw?.length
     ? foodRaw.reduce((sum, f) => sum + (f.estimated_calories ?? 0), 0)
     : null
-  const activeEnergy  = todayMetrics?.active_energy_kcal   ?? null
-  const restingEnergy = todayMetrics?.resting_energy_kcal  ?? null
+
+  const todayHasEnergy =
+    todayMetrics?.active_energy_kcal != null || todayMetrics?.resting_energy_kcal != null
+  const energyRow = todayHasEnergy
+    ? todayMetrics
+    : (recentEnergyRaw?.[0] ?? null)
+  const activeEnergy  = energyRow?.active_energy_kcal  ?? null
+  const restingEnergy = energyRow?.resting_energy_kcal ?? null
 
   const sleepHours = todayMetrics?.sleep_minutes
     ? (todayMetrics.sleep_minutes / 60).toFixed(1)

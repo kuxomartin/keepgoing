@@ -27,12 +27,14 @@ export default async function NutritionPage() {
     format(subDays(startOfDay(new Date()), 6 - i), 'yyyy-MM-dd')
   )
   const oldest = dates[0]
+  // Look back 30 days for energy fallback (fills gaps in the 7-day chart)
+  const lookback30 = format(subDays(startOfDay(new Date()), 29), 'yyyy-MM-dd')
 
-  // Fetch health_metrics for past 7 days
+  // Fetch health_metrics for past 30 days (wider window catches energy gaps)
   const { data: metricsRaw } = await supabase
     .from('health_metrics')
     .select('date, active_energy_kcal, resting_energy_kcal')
-    .gte('date', oldest)
+    .gte('date', lookback30)
     .lte('date', today)
     .order('date', { ascending: true })
 
@@ -51,6 +53,12 @@ export default async function NutritionPage() {
       resting: row.resting_energy_kcal ?? null,
     }
   }
+
+  // Most recent row that has energy data — used as fallback when today has none
+  const latestEnergyRow = [...(metricsRaw ?? [])]
+    .reverse()
+    .find(r => r.active_energy_kcal != null || r.resting_energy_kcal != null)
+  const energyFallbackDate = latestEnergyRow?.date ?? null
 
   // Aggregate food by date
   interface FoodDay { calories: number; protein: number; carbs: number; fat: number; entries: number }
@@ -79,12 +87,18 @@ export default async function NutritionPage() {
     }
   })
 
-  // Today's values
-  const todayMetrics  = metricsByDate[today]
+  // Today's values — fall back to most recent available energy when today has none
+  const todayMetrics    = metricsByDate[today]
+  const energySource    = todayMetrics ?? (latestEnergyRow ? {
+    active:  latestEnergyRow.active_energy_kcal  ?? null,
+    resting: latestEnergyRow.resting_energy_kcal ?? null,
+  } : null)
+  const energyIsEstimate = !todayMetrics && energySource != null
+
   const todayFood     = foodByDate[today]
   const todayConsumed = todayFood?.calories ?? null
-  const todayActive   = todayMetrics?.active  ?? null
-  const todayResting  = todayMetrics?.resting ?? null
+  const todayActive   = energySource?.active  ?? null
+  const todayResting  = energySource?.resting ?? null
   const todayBalance  = computeBalance(todayConsumed, todayActive, todayResting)
 
   // 7-day averages
@@ -116,9 +130,16 @@ export default async function NutritionPage() {
       {/* Today balance */}
       <Card className={cn('border-l-4', todayBalance.borderColor)}>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Flame className="h-4 w-4 text-gray-400" />
-            <CardTitle>Today's Balance</CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Flame className="h-4 w-4 text-gray-400" />
+              <CardTitle>Today's Balance</CardTitle>
+            </div>
+            {energyIsEstimate && energyFallbackDate && (
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                burned est. from {format(new Date(energyFallbackDate + 'T12:00:00'), 'd MMM')}
+              </span>
+            )}
           </div>
         </CardHeader>
         <CardContent>
