@@ -4,7 +4,7 @@
  * Throws with a clear message if any required var is missing.
  */
 
-type EnvGroup = 'public' | 'google' | 'cron' | 'admin'
+type EnvGroup = 'public' | 'google' | 'cron' | 'admin' | 'openai'
 
 const ENV_VARS: Record<EnvGroup, string[]> = {
   public: [
@@ -21,6 +21,9 @@ const ENV_VARS: Record<EnvGroup, string[]> = {
   ],
   admin: [
     'SUPABASE_SERVICE_ROLE_KEY',
+  ],
+  openai: [
+    'OPENAI_API_KEY',
   ],
 }
 
