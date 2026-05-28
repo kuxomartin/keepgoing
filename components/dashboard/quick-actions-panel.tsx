@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,14 +10,7 @@ import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { Utensils, Scale, ClipboardList, Activity } from 'lucide-react'
 
-type ActivePanel = 'meal' | 'weight' | 'checkin' | 'activity' | null
-
-const ACTION_BUTTONS = [
-  { id: 'meal' as const,     label: 'Meal',      icon: Utensils },
-  { id: 'weight' as const,   label: 'Weight',    icon: Scale },
-  { id: 'checkin' as const,  label: 'Check-in',  icon: ClipboardList },
-  { id: 'activity' as const, label: 'Activity',  icon: Activity },
-]
+type ActivePanel = 'weight' | 'checkin' | 'activity' | null
 
 // ── Weight ──────────────────────────────────────────────────────────────────
 function WeightForm({ onDone }: { onDone: () => void }) {
@@ -55,62 +49,6 @@ function WeightForm({ onDone }: { onDone: () => void }) {
       />
       <Button type="submit" size="lg" className="w-full" disabled={loading || saved}>
         {saved ? '✓ Saved!' : loading ? 'Saving…' : 'Save weight'}
-      </Button>
-    </form>
-  )
-}
-
-// ── Meal ────────────────────────────────────────────────────────────────────
-const MEAL_OPTIONS = [
-  { value: 'breakfast', label: 'Breakfast' },
-  { value: 'lunch',     label: 'Lunch' },
-  { value: 'dinner',    label: 'Dinner' },
-  { value: 'snack',     label: 'Snack' },
-]
-
-function MealForm({ onDone }: { onDone: () => void }) {
-  const [mealType, setMealType] = useState('breakfast')
-  const [description, setDescription] = useState('')
-  const [calories, setCalories] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [saved, setSaved] = useState(false)
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!description.trim()) return
-    setLoading(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setLoading(false); return }
-    const today = new Date().toISOString().slice(0, 10)
-    await supabase.from('food_logs').insert({
-      user_id: user.id, date: today, meal_type: mealType,
-      description: description.trim(),
-      estimated_calories: calories ? parseInt(calories) : null,
-    })
-    setSaved(true)
-    setLoading(false)
-    setTimeout(onDone, 800)
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-4">
-      <Select
-        id="qa-meal-type" label="Meal" value={mealType}
-        onChange={e => setMealType(e.target.value)} options={MEAL_OPTIONS}
-      />
-      <Input
-        id="qa-food-desc" label="What did you eat?"
-        value={description} onChange={e => setDescription(e.target.value)}
-        placeholder="Oats with banana and honey" required autoFocus
-      />
-      <Input
-        id="qa-food-cal" type="number" label="Calories (optional)"
-        value={calories} onChange={e => setCalories(e.target.value)}
-        placeholder="380" min="0"
-      />
-      <Button type="submit" size="lg" className="w-full" disabled={loading || saved}>
-        {saved ? '✓ Saved!' : loading ? 'Saving…' : 'Save meal'}
       </Button>
     </form>
   )
@@ -252,6 +190,20 @@ function CheckinForm({ onDone }: { onDone: () => void }) {
 }
 
 // ── Panel (mobile-only, hidden on lg+) ───────────────────────────────────────
+
+type PanelButton =
+  | { id: 'meal';     label: string; icon: typeof Utensils; href: string }
+  | { id: 'weight';   label: string; icon: typeof Scale;    href?: undefined }
+  | { id: 'checkin';  label: string; icon: typeof ClipboardList; href?: undefined }
+  | { id: 'activity'; label: string; icon: typeof Activity; href?: undefined }
+
+const PANEL_BUTTONS: PanelButton[] = [
+  { id: 'meal',     label: 'Meal',     icon: Utensils,      href: '/food/add?from=today' },
+  { id: 'weight',   label: 'Weight',   icon: Scale },
+  { id: 'checkin',  label: 'Check-in', icon: ClipboardList },
+  { id: 'activity', label: 'Activity', icon: Activity },
+]
+
 export function QuickActionsPanel() {
   const [active, setActive] = useState<ActivePanel>(null)
 
@@ -263,24 +215,46 @@ export function QuickActionsPanel() {
     <div className="lg:hidden space-y-3">
       {/* Action strip */}
       <div className="flex gap-2 overflow-x-auto pb-0.5 -mx-4 px-4 sm:mx-0 sm:px-0">
-        {ACTION_BUTTONS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => toggle(id)}
-            className={cn(
-              'flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium',
-              'whitespace-nowrap flex-shrink-0 transition-colors border',
-              'min-h-[44px]',
-              active === id
-                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                : 'bg-white border-gray-200 text-gray-700 active:scale-95'
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            <span>+ {label}</span>
-          </button>
-        ))}
+        {PANEL_BUTTONS.map(({ id, label, icon: Icon, href }) => {
+          const isActive = active === id
+
+          // Meal → navigate to dedicated page
+          if (href) {
+            return (
+              <Link
+                key={id}
+                href={href}
+                className={cn(
+                  'flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium',
+                  'whitespace-nowrap flex-shrink-0 transition-colors border min-h-[44px]',
+                  'bg-white border-gray-200 text-gray-700 active:scale-95'
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                <span>+ {label}</span>
+              </Link>
+            )
+          }
+
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => toggle(id as ActivePanel)}
+              className={cn(
+                'flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium',
+                'whitespace-nowrap flex-shrink-0 transition-colors border',
+                'min-h-[44px]',
+                isActive
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                  : 'bg-white border-gray-200 text-gray-700 active:scale-95'
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              <span>+ {label}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Expanded form panel */}
@@ -288,7 +262,6 @@ export function QuickActionsPanel() {
         <Card>
           <CardContent className="py-5">
             {active === 'weight'   && <WeightForm   onDone={() => setActive(null)} />}
-            {active === 'meal'     && <MealForm     onDone={() => setActive(null)} />}
             {active === 'checkin'  && <CheckinForm  onDone={() => setActive(null)} />}
             {active === 'activity' && <ActivityForm onDone={() => setActive(null)} />}
           </CardContent>

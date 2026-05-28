@@ -2,9 +2,10 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
+import Link from 'next/link'
+import { Plus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { QuickAddFood } from '@/components/dashboard/quick-add-food'
 import { mockFoodLogs } from '@/lib/mock-data/demo-data'
 import type { FoodLog, MealType } from '@/types/database'
 
@@ -51,13 +52,22 @@ export default async function FoodPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Food Log</h1>
-        {isUsingMock && (
-          <p className="mt-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 inline-block">
-            Showing demo data
-          </p>
-        )}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Food Log</h1>
+          {isUsingMock && (
+            <p className="mt-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 inline-block">
+              Showing demo data
+            </p>
+          )}
+        </div>
+        <Link
+          href="/food/add"
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors flex-shrink-0 shadow-sm"
+        >
+          <Plus className="h-4 w-4" />
+          Add Meal
+        </Link>
       </div>
 
       {/* Date picker */}
@@ -166,7 +176,6 @@ export default async function FoodPage({ searchParams }: PageProps) {
         ))
       )}
 
-      <QuickAddFood />
     </div>
   )
 }

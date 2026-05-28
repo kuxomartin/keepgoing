@@ -11,7 +11,8 @@ import { QuickAddActivity } from '@/components/dashboard/quick-add-activity'
 import { getRecoveryScore } from '@/lib/calculations/recovery-score'
 import { mockHealthMetrics, mockWeightLogs } from '@/lib/mock-data/demo-data'
 import type { HealthMetrics, WeightLog } from '@/types/database'
-import { Scale, Moon, Heart, Zap } from 'lucide-react'
+import Link from 'next/link'
+import { Scale, Moon, Heart, Zap, UtensilsCrossed } from 'lucide-react'
 import { QuickActionsPanel } from '@/components/dashboard/quick-actions-panel'
 
 export default async function TodayPage() {
@@ -102,7 +103,23 @@ export default async function TodayPage() {
       {/* Recommendation */}
       <RecommendationCard recovery={recovery} />
 
-      {/* Mobile: quick action strip (hidden on desktop) */}
+      {/* Mobile: prominent "Add Meal" shortcut + quick action strip */}
+      <Link
+        href="/food/add?from=today"
+        className="lg:hidden flex items-center justify-between bg-white rounded-xl border border-gray-200 px-5 py-4 shadow-sm hover:border-blue-200 hover:shadow-md transition-all group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+            <UtensilsCrossed className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Log a meal</p>
+            <p className="text-xs text-gray-400">Tap to add food</p>
+          </div>
+        </div>
+        <span className="text-blue-600 font-semibold text-lg">+</span>
+      </Link>
+
       <QuickActionsPanel />
 
       {/* Daily check-in */}
