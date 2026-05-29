@@ -8,46 +8,74 @@ import { DailyCheckinForm } from '@/components/dashboard/daily-checkin-form'
 import { QuickAddWeight } from '@/components/dashboard/quick-add-weight'
 import { QuickAddFood } from '@/components/dashboard/quick-add-food'
 import { QuickAddActivity } from '@/components/dashboard/quick-add-activity'
+import { DailySummaryCard } from '@/components/dashboard/daily-summary-card'
 import { getRecoveryScore } from '@/lib/calculations/recovery-score'
 import { mockHealthMetrics, mockWeightLogs } from '@/lib/mock-data/demo-data'
 import type { HealthMetrics, WeightLog } from '@/types/database'
 import Link from 'next/link'
 import { Scale, Moon, Heart, Zap, UtensilsCrossed } from 'lucide-react'
 import { QuickActionsPanel } from '@/components/dashboard/quick-actions-panel'
-import { CalorieBalanceCard } from '@/components/nutrition/calorie-balance-card'
 
 export default async function TodayPage() {
   const supabase = await createClient()
   const today = format(new Date(), 'yyyy-MM-dd')
   const longDate = format(new Date(), 'EEEE, d MMMM yyyy')
 
-  // Fetch real data
-  const [{ data: metricsRaw }, { data: weightsRaw }, { data: foodRaw }, { data: recentEnergyRaw }] = await Promise.all([
+  const [
+    { data: metricsRaw },
+    { data: weightsRaw },
+    { data: foodRaw },
+    { data: recentEnergyRaw },
+    { data: activitiesRaw },
+    { data: checkinRaw },
+    { data: weights7dRaw },
+  ] = await Promise.all([
+    // Today's health metrics
     supabase
       .from('health_metrics')
       .select('*')
       .eq('date', today)
       .order('created_at', { ascending: false })
       .limit(1),
+    // Latest weight
     supabase
       .from('weight_logs')
       .select('*')
       .order('date', { ascending: false })
       .limit(1),
+    // Today's food logs (calories + protein)
     supabase
       .from('food_logs')
-      .select('estimated_calories')
+      .select('estimated_calories, protein_g')
       .eq('date', today),
-    // Most-recent row with actual energy data — fallback for calorie card when today has no metrics
+    // Most-recent row with actual energy data — fallback when today has no metrics
     supabase
       .from('health_metrics')
       .select('date, active_energy_kcal, resting_energy_kcal')
       .not('active_energy_kcal', 'is', null)
       .order('date', { ascending: false })
       .limit(1),
+    // Today's activities
+    supabase
+      .from('activities')
+      .select('duration_minutes')
+      .gte('start_time', today + 'T00:00:00')
+      .lte('start_time', today + 'T23:59:59'),
+    // Today's check-in
+    supabase
+      .from('daily_checkins')
+      .select('energy, stress, soreness')
+      .eq('date', today)
+      .limit(1),
+    // Last 7 weight logs for 7-day average
+    supabase
+      .from('weight_logs')
+      .select('weight_kg')
+      .order('date', { ascending: false })
+      .limit(7),
   ])
 
-  // Fallback to mock
+  // ── Existing mock-fallback for StatCards + RecommendationCard ─────────────
   const todayMetrics: HealthMetrics | null =
     metricsRaw && metricsRaw.length > 0
       ? (metricsRaw[0] as HealthMetrics)
@@ -60,22 +88,44 @@ export default async function TodayPage() {
 
   const recovery = getRecoveryScore(todayMetrics)
 
-  // Calorie balance — use today's metrics first, fall back to most-recent-with-energy
-  const consumedToday = foodRaw?.length
-    ? foodRaw.reduce((sum, f) => sum + (f.estimated_calories ?? 0), 0)
-    : null
-
-  const todayHasEnergy =
-    todayMetrics?.active_energy_kcal != null || todayMetrics?.resting_energy_kcal != null
-  const energyRow = todayHasEnergy
-    ? todayMetrics
-    : (recentEnergyRaw?.[0] ?? null)
-  const activeEnergy  = energyRow?.active_energy_kcal  ?? null
-  const restingEnergy = energyRow?.resting_energy_kcal ?? null
-
   const sleepHours = todayMetrics?.sleep_minutes
     ? (todayMetrics.sleep_minutes / 60).toFixed(1)
     : null
+
+  // ── Real-data-only values for DailySummaryCard ────────────────────────────
+  const realMetrics = metricsRaw?.[0] as HealthMetrics | null ?? null
+
+  // Energy: prefer today's real metrics, fall back to most-recent available
+  const todayHasEnergy =
+    realMetrics?.active_energy_kcal != null || realMetrics?.resting_energy_kcal != null
+  const energyRow = todayHasEnergy ? realMetrics : (recentEnergyRaw?.[0] ?? null)
+  const energyFallbackDate = !todayHasEnergy && energyRow ? (energyRow.date as string) : null
+  const activeEnergy  = energyRow?.active_energy_kcal  ?? null
+  const restingEnergy = energyRow?.resting_energy_kcal ?? null
+
+  // Food
+  const consumed = foodRaw?.length
+    ? foodRaw.reduce((sum, f) => sum + (f.estimated_calories ?? 0), 0)
+    : null
+  const protein = foodRaw?.some(f => f.protein_g != null)
+    ? foodRaw.reduce((sum, f) => sum + (f.protein_g ?? 0), 0)
+    : null
+
+  // Activities
+  const activityCount   = activitiesRaw?.length ?? 0
+  const activityMinutes = activitiesRaw?.reduce((sum, a) => sum + (a.duration_minutes ?? 0), 0) ?? 0
+
+  // Check-in
+  const checkinData = checkinRaw?.[0] ?? null
+
+  // 7-day weight average
+  const avgWeight7d =
+    weights7dRaw && weights7dRaw.length >= 2
+      ? weights7dRaw.reduce((sum, w) => sum + w.weight_kg, 0) / weights7dRaw.length
+      : null
+
+  // Recovery from real data only (null if no real metrics today)
+  const realRecovery = realMetrics ? getRecoveryScore(realMetrics) : null
 
   return (
     <div className="space-y-6">
@@ -125,14 +175,26 @@ export default async function TodayPage() {
         />
       </div>
 
-      {/* Recommendation */}
+      {/* Recovery recommendation */}
       <RecommendationCard recovery={recovery} />
 
-      {/* Calorie Balance */}
-      <CalorieBalanceCard
-        consumed={consumedToday}
+      {/* Daily summary — real data only, graceful missing states */}
+      <DailySummaryCard
+        consumed={consumed}
+        protein={protein}
         activeEnergy={activeEnergy}
         restingEnergy={restingEnergy}
+        energyFallbackDate={energyFallbackDate}
+        recovery={realRecovery}
+        hrv={realMetrics?.hrv_ms ?? null}
+        restingHr={realMetrics?.resting_hr ?? null}
+        sleepHours={realMetrics?.sleep_minutes != null ? realMetrics.sleep_minutes / 60 : null}
+        steps={realMetrics?.steps ?? null}
+        activityCount={activityCount}
+        activityMinutes={activityMinutes}
+        latestWeight={weightsRaw?.[0]?.weight_kg ?? null}
+        avgWeight7d={avgWeight7d}
+        checkin={checkinData}
       />
 
       {/* Mobile: prominent "Add Meal" shortcut + quick action strip */}
