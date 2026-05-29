@@ -12,6 +12,7 @@ import {
   Settings,
   LogOut,
   Flame,
+  Coffee,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -20,6 +21,7 @@ const navItems = [
   { href: '/today',     label: 'Today',      icon: LayoutDashboard },
   { href: '/activities',label: 'Activities', icon: Activity },
   { href: '/food',      label: 'Food Log',   icon: Utensils },
+  { href: '/coffee/add',label: 'Coffee',     icon: Coffee },
   { href: '/nutrition', label: 'Nutrition',  icon: Flame },
   { href: '/weight',    label: 'Weight',     icon: Scale },
   { href: '/recovery',  label: 'Recovery',   icon: Heart },
