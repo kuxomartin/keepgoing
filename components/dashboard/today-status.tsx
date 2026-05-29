@@ -1,21 +1,13 @@
 import { cn } from '@/lib/utils'
-import { computeTodayStatus } from '@/lib/calculations/today-status'
-import type { RecoveryResult } from '@/types/database'
+import type { TodayReadiness } from '@/lib/insights/types'
 
 interface Props {
-  recovery: RecoveryResult | null
-  sleepHours: number | null
-  consumed: number | null
-  /** Must be same-date burn data only — pass null if today has no energy metrics */
-  burned: number | null
-  checkin: { energy: number | null; stress: number | null } | null
+  readiness: TodayReadiness
+  headline: string
+  supporting: string[]
 }
 
-export function TodayStatus({ recovery, sleepHours, consumed, burned, checkin }: Props) {
-  const { readiness, headline, supporting } = computeTodayStatus({
-    recovery, sleepHours, consumed, burned, checkin,
-  })
-
+export function TodayStatus({ readiness, headline, supporting }: Props) {
   const styles = {
     go: {
       wrap:  'bg-green-50 border-green-200',
