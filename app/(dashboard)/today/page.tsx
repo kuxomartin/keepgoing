@@ -3,11 +3,11 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
 import { StatCard } from '@/components/ui/stat-card'
-import { RecommendationCard } from '@/components/dashboard/recommendation-card'
 import { DailyCheckinForm } from '@/components/dashboard/daily-checkin-form'
 import { QuickAddWeight } from '@/components/dashboard/quick-add-weight'
 import { QuickAddFood } from '@/components/dashboard/quick-add-food'
 import { QuickAddActivity } from '@/components/dashboard/quick-add-activity'
+import { TodayStatus } from '@/components/dashboard/today-status'
 import { DailySummaryCard } from '@/components/dashboard/daily-summary-card'
 import { getRecoveryScore } from '@/lib/calculations/recovery-score'
 import { mockHealthMetrics, mockWeightLogs } from '@/lib/mock-data/demo-data'
@@ -25,7 +25,6 @@ export default async function TodayPage() {
     { data: metricsRaw },
     { data: weightsRaw },
     { data: foodRaw },
-    { data: recentEnergyRaw },
     { data: activitiesRaw },
     { data: checkinRaw },
     { data: weights7dRaw },
@@ -37,7 +36,7 @@ export default async function TodayPage() {
       .eq('date', today)
       .order('created_at', { ascending: false })
       .limit(1),
-    // Latest weight
+    // Latest weight log
     supabase
       .from('weight_logs')
       .select('*')
@@ -48,13 +47,6 @@ export default async function TodayPage() {
       .from('food_logs')
       .select('estimated_calories, protein_g')
       .eq('date', today),
-    // Most-recent row with actual energy data — fallback when today has no metrics
-    supabase
-      .from('health_metrics')
-      .select('date, active_energy_kcal, resting_energy_kcal')
-      .not('active_energy_kcal', 'is', null)
-      .order('date', { ascending: false })
-      .limit(1),
     // Today's activities
     supabase
       .from('activities')
@@ -75,33 +67,34 @@ export default async function TodayPage() {
       .limit(7),
   ])
 
-  // ── Existing mock-fallback for StatCards + RecommendationCard ─────────────
+  // ── Mock fallback for StatCards (display only) ────────────────────────────
   const todayMetrics: HealthMetrics | null =
     metricsRaw && metricsRaw.length > 0
       ? (metricsRaw[0] as HealthMetrics)
       : (mockHealthMetrics.find((m) => m.date === today) ?? mockHealthMetrics[0])
 
-  const latestWeight: WeightLog | null =
+  const latestWeightMock: WeightLog | null =
     weightsRaw && weightsRaw.length > 0
       ? (weightsRaw[0] as WeightLog)
       : mockWeightLogs[0]
 
-  const recovery = getRecoveryScore(todayMetrics)
-
   const sleepHours = todayMetrics?.sleep_minutes
-    ? (todayMetrics.sleep_minutes / 60).toFixed(1)
+    ? parseFloat((todayMetrics.sleep_minutes / 60).toFixed(1))
     : null
 
-  // ── Real-data-only values for DailySummaryCard ────────────────────────────
+  // ── Real-data-only values (no mock, no cross-date fallbacks) ──────────────
   const realMetrics = metricsRaw?.[0] as HealthMetrics | null ?? null
+  const realRecovery = realMetrics ? getRecoveryScore(realMetrics) : null
 
-  // Energy: prefer today's real metrics, fall back to most-recent available
-  const todayHasEnergy =
-    realMetrics?.active_energy_kcal != null || realMetrics?.resting_energy_kcal != null
-  const energyRow = todayHasEnergy ? realMetrics : (recentEnergyRaw?.[0] ?? null)
-  const energyFallbackDate = !todayHasEnergy && energyRow ? (energyRow.date as string) : null
-  const activeEnergy  = energyRow?.active_energy_kcal  ?? null
-  const restingEnergy = energyRow?.resting_energy_kcal ?? null
+  // Energy: today's real metrics ONLY — no fallback to previous days
+  const activeEnergy  = realMetrics?.active_energy_kcal  ?? null
+  const restingEnergy = realMetrics?.resting_energy_kcal ?? null
+
+  // Burned kcal (same-date, for TodayStatus calorie check)
+  const burned =
+    activeEnergy != null
+      ? activeEnergy + (restingEnergy ?? 0)
+      : null
 
   // Food
   const consumed = foodRaw?.length
@@ -124,8 +117,8 @@ export default async function TodayPage() {
       ? weights7dRaw.reduce((sum, w) => sum + w.weight_kg, 0) / weights7dRaw.length
       : null
 
-  // Recovery from real data only (null if no real metrics today)
-  const realRecovery = realMetrics ? getRecoveryScore(realMetrics) : null
+  // Recovery for mock-based StatCards
+  const mockRecovery = getRecoveryScore(todayMetrics)
 
   return (
     <div className="space-y-6">
@@ -134,13 +127,22 @@ export default async function TodayPage() {
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Today</h1>
       </div>
 
-      {/* Stats row */}
+      {/* ① Action-oriented status — the first thing to read */}
+      <TodayStatus
+        recovery={realRecovery}
+        sleepHours={realMetrics?.sleep_minutes != null ? realMetrics.sleep_minutes / 60 : null}
+        consumed={consumed}
+        burned={burned}
+        checkin={checkinData}
+      />
+
+      {/* ② Metric stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Weight"
-          value={latestWeight ? latestWeight.weight_kg.toFixed(1) : '—'}
-          unit={latestWeight ? 'kg' : ''}
-          subtitle={latestWeight ? `Last: ${latestWeight.date}` : 'Not logged yet'}
+          value={latestWeightMock ? latestWeightMock.weight_kg.toFixed(1) : '—'}
+          unit={latestWeightMock ? 'kg' : ''}
+          subtitle={latestWeightMock ? `Last: ${latestWeightMock.date}` : 'Not logged yet'}
           icon={<Scale className="h-5 w-5" />}
         />
         <StatCard
@@ -151,7 +153,7 @@ export default async function TodayPage() {
             ? `${Math.round(todayMetrics.deep_sleep_minutes / 60 * 10) / 10}h deep`
             : undefined}
           status={sleepHours
-            ? (parseFloat(sleepHours) >= 7 ? 'green' : parseFloat(sleepHours) >= 6 ? 'yellow' : 'red')
+            ? (sleepHours >= 7 ? 'green' : sleepHours >= 6 ? 'yellow' : 'red')
             : 'neutral'}
           icon={<Moon className="h-5 w-5" />}
         />
@@ -175,16 +177,12 @@ export default async function TodayPage() {
         />
       </div>
 
-      {/* Recovery recommendation */}
-      <RecommendationCard recovery={recovery} />
-
-      {/* Daily summary — real data only, graceful missing states */}
+      {/* ③ Full daily summary — real data only */}
       <DailySummaryCard
         consumed={consumed}
         protein={protein}
         activeEnergy={activeEnergy}
         restingEnergy={restingEnergy}
-        energyFallbackDate={energyFallbackDate}
         recovery={realRecovery}
         hrv={realMetrics?.hrv_ms ?? null}
         restingHr={realMetrics?.resting_hr ?? null}
@@ -197,7 +195,7 @@ export default async function TodayPage() {
         checkin={checkinData}
       />
 
-      {/* Mobile: prominent "Add Meal" shortcut + quick action strip */}
+      {/* Mobile: prominent "Add Meal" shortcut */}
       <Link
         href="/food/add?from=today"
         className="lg:hidden flex items-center justify-between bg-white rounded-xl border border-gray-200 px-5 py-4 shadow-sm hover:border-blue-200 hover:shadow-md transition-all group"
@@ -219,7 +217,7 @@ export default async function TodayPage() {
       {/* Daily check-in */}
       <DailyCheckinForm />
 
-      {/* Desktop: quick-add cards (hidden on mobile — handled by QuickActionsPanel) */}
+      {/* Desktop: quick-add cards */}
       <div className="hidden lg:grid grid-cols-3 gap-4">
         <QuickAddWeight />
         <QuickAddFood />
