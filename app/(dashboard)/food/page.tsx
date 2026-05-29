@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { Plus, Pencil } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { mockFoodLogs } from '@/lib/mock-data/demo-data'
 import type { FoodLog, MealType } from '@/types/database'
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack', 'other']
@@ -38,12 +37,7 @@ export default async function FoodPage({ searchParams }: PageProps) {
     .order('eaten_at', { ascending: true })    // sort by exact time
     .order('created_at', { ascending: true })  // fallback
 
-  const isUsingMock = !rawLogs || rawLogs.length === 0
-
-  const logs: FoodLog[] =
-    rawLogs && rawLogs.length > 0
-      ? (rawLogs as FoodLog[])
-      : mockFoodLogs.filter((f) => f.date === selectedDate || selectedDate === format(new Date(), 'yyyy-MM-dd'))
+  const logs: FoodLog[] = rawLogs ? (rawLogs as FoodLog[]) : []
 
   const totalCalories = logs.reduce((sum, f) => sum + (f.estimated_calories ?? 0), 0)
   const totalProtein  = logs.reduce((sum, f) => sum + (f.protein_g ?? 0), 0)
@@ -63,11 +57,6 @@ export default async function FoodPage({ searchParams }: PageProps) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Food Log</h1>
-          {isUsingMock && (
-            <p className="mt-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 inline-block">
-              Showing demo data
-            </p>
-          )}
         </div>
         <Link
           href="/food/add"
@@ -128,7 +117,7 @@ export default async function FoodPage({ searchParams }: PageProps) {
       {Object.keys(grouped).length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center space-y-3">
-            <p className="text-sm text-gray-400">No food logged for this day yet.</p>
+            <p className="text-sm text-gray-400">No meals logged for this day.</p>
             <Link href="/food/add"
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
@@ -184,16 +173,13 @@ export default async function FoodPage({ searchParams }: PageProps) {
                             {f.estimated_calories ? (
                               <span className="text-sm font-medium text-gray-700">{f.estimated_calories} kcal</span>
                             ) : null}
-                            {/* Edit link — only for real rows (not mock) */}
-                            {!isUsingMock && (
-                              <Link
-                                href={`/food/${f.id}/edit`}
-                                className="p-1.5 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                title="Edit"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Link>
-                            )}
+                            <Link
+                              href={`/food/${f.id}/edit`}
+                              className="p-1.5 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Link>
                           </div>
                         </div>
                       </li>
