@@ -56,6 +56,31 @@ export type TodayReadiness = 'go' | 'moderate' | 'rest'
 export interface InsightEngineOutput {
   insights: Insight[]
   todayReadiness: TodayReadiness
-  todayHeadline: string
+  /** One sentence describing the recovery state. e.g. "HRV is 12% above baseline." */
+  todayInterpretation: string
+  /** One sentence telling the user what to do. e.g. "A hard session is on the table." */
+  todayRecommendation: string
+  /** Supporting evidence bullets (up to 3). */
   todaySupporting: string[]
+  /** True when today had no health data and yesterday's data was used as reference. */
+  usingFallback: boolean
+}
+
+// ── Trend types (used by TrendWidget) ─────────────────────────────────────────
+
+export type TrendDirection = 'up' | 'down' | 'stable'
+export type TrendSentiment = 'good' | 'bad' | 'neutral'
+
+export interface TrendItem {
+  label: string
+  value: string        // formatted, e.g. "−0.6 kg", "improving", "stable"
+  direction: TrendDirection
+  window: string       // e.g. "14 days"
+  sentiment: TrendSentiment
+}
+
+export interface TrendSummary {
+  items: TrendItem[]
+  interpretation: string
+  recommendation: string
 }
