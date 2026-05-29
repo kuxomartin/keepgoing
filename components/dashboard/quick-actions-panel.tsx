@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { Utensils, Scale, ClipboardList, Activity } from 'lucide-react'
+import { Utensils, Scale, ClipboardList, Activity, Coffee } from 'lucide-react'
 
 type ActivePanel = 'weight' | 'checkin' | 'activity' | null
 
@@ -192,13 +192,15 @@ function CheckinForm({ onDone }: { onDone: () => void }) {
 // ── Panel (mobile-only, hidden on lg+) ───────────────────────────────────────
 
 type PanelButton =
-  | { id: 'meal';     label: string; icon: typeof Utensils; href: string }
-  | { id: 'weight';   label: string; icon: typeof Scale;    href?: undefined }
+  | { id: 'meal';     label: string; icon: typeof Utensils;      href: string }
+  | { id: 'coffee';   label: string; icon: typeof Coffee;        href: string }
+  | { id: 'weight';   label: string; icon: typeof Scale;         href?: undefined }
   | { id: 'checkin';  label: string; icon: typeof ClipboardList; href?: undefined }
-  | { id: 'activity'; label: string; icon: typeof Activity; href?: undefined }
+  | { id: 'activity'; label: string; icon: typeof Activity;      href?: undefined }
 
 const PANEL_BUTTONS: PanelButton[] = [
   { id: 'meal',     label: 'Meal',     icon: Utensils,      href: '/food/add?from=today' },
+  { id: 'coffee',   label: 'Coffee',   icon: Coffee,        href: '/coffee/add?from=today' },
   { id: 'weight',   label: 'Weight',   icon: Scale },
   { id: 'checkin',  label: 'Check-in', icon: ClipboardList },
   { id: 'activity', label: 'Activity', icon: Activity },

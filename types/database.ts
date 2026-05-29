@@ -40,6 +40,18 @@ export interface WeightLog {
   created_at: string
 }
 
+export interface CoffeeLog {
+  id: string
+  user_id: string
+  consumed_at: string       // ISO timestamptz
+  date: string              // YYYY-MM-DD
+  coffee_type: string
+  cups: number
+  caffeine_mg: number | null
+  notes: string | null
+  created_at: string
+}
+
 export interface FoodLog {
   id: string
   user_id: string

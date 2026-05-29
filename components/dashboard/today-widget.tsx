@@ -14,13 +14,18 @@ interface Props {
   supporting: string[]    // evidence bullets
   usingFallback: boolean  // data from yesterday, not today
 
-  // Hard data
+  // Hard data — recovery
   sleepH: number | null
   hrv: number | null
   rhr: number | null
+  // Hard data — today's logged
   consumedKcal: number | null
   proteinG: number | null
   activityMinutes: number
+  // Coffee
+  coffeeCups: number
+  coffeeMg: number | null
+  lastCoffeeTime: string | null  // HH:MM
 }
 
 const STATUS = {
@@ -50,6 +55,7 @@ const STATUS = {
 export function TodayWidget({
   readiness, interpretation, recommendation, supporting, usingFallback,
   sleepH, hrv, rhr, consumedKcal, proteinG, activityMinutes,
+  coffeeCups, coffeeMg, lastCoffeeTime,
 }: Props) {
   const s = STATUS[readiness]
 
@@ -60,9 +66,15 @@ export function TodayWidget({
   ].filter(Boolean) as string[]
 
   const todayChips = [
-    consumedKcal != null && `${consumedKcal.toLocaleString()} kcal`,
-    proteinG     != null && `${Math.round(proteinG)}g protein`,
-    activityMinutes > 0  && `${activityMinutes}min activity`,
+    consumedKcal    != null && `${consumedKcal.toLocaleString()} kcal`,
+    proteinG        != null && `${Math.round(proteinG)}g protein`,
+    activityMinutes > 0     && `${activityMinutes}min activity`,
+  ].filter(Boolean) as string[]
+
+  const coffeeChips = [
+    coffeeCups > 0         && `☕ ${coffeeCups % 1 === 0 ? coffeeCups : coffeeCups.toFixed(1)} cup${coffeeCups !== 1 ? 's' : ''}`,
+    coffeeMg   != null && coffeeMg > 0 && `${coffeeMg}mg caffeine`,
+    lastCoffeeTime         && `last ${lastCoffeeTime}`,
   ].filter(Boolean) as string[]
 
   return (
@@ -112,12 +124,24 @@ export function TodayWidget({
         </p>
 
         {/* Today's logged data (so far) */}
-        {todayChips.length > 0 && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-gray-100 pt-2.5">
-            <span className="text-[10px] text-gray-400 font-medium self-center">Logged today ·</span>
-            {todayChips.map(chip => (
-              <span key={chip} className="text-xs text-gray-500">{chip}</span>
-            ))}
+        {(todayChips.length > 0 || coffeeChips.length > 0) && (
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 border-t border-gray-100 pt-2.5">
+            {todayChips.length > 0 && (
+              <>
+                <span className="text-[10px] text-gray-400 font-medium self-center">Food ·</span>
+                {todayChips.map(chip => (
+                  <span key={chip} className="text-xs text-gray-500">{chip}</span>
+                ))}
+              </>
+            )}
+            {coffeeChips.length > 0 && (
+              <>
+                {todayChips.length > 0 && <span className="text-gray-200 self-center">·</span>}
+                {coffeeChips.map(chip => (
+                  <span key={chip} className="text-xs text-gray-500">{chip}</span>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>

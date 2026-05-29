@@ -13,6 +13,7 @@ import { YesterdayWidget } from '@/components/dashboard/yesterday-widget'
 import { TrendWidget } from '@/components/dashboard/trend-widget'
 import { runInsightEngine } from '@/lib/insights/engine'
 import { computeTrendItems, computeTrendSummary } from '@/lib/insights/trends'
+import { generateCoffeeInsights } from '@/lib/insights/coffee-rules'
 import { mockHealthMetrics, mockWeightLogs } from '@/lib/mock-data/demo-data'
 import type { HealthMetrics, WeightLog } from '@/types/database'
 import type { DaySummary } from '@/lib/insights/types'
@@ -52,13 +53,14 @@ export default async function TodayPage() {
   const d30ago   = format(subDays(startOfDay(new Date()), 29), 'yyyy-MM-dd')
   const d14ago   = format(subDays(startOfDay(new Date()), 13), 'yyyy-MM-dd')
 
-  // 5 parallel fetches — wider windows for insight engine
+  // 6 parallel fetches — wider windows for insight engine
   const [
     { data: metricsRaw },
     { data: foodRaw },
     { data: weightsRaw },
     { data: activitiesRaw },
     { data: checkinRaw },
+    { data: coffeeRaw },
   ] = await Promise.all([
     supabase.from('health_metrics')
       .select('date, hrv_ms, resting_hr, sleep_minutes, steps, active_energy_kcal, resting_energy_kcal')
@@ -80,6 +82,12 @@ export default async function TodayPage() {
     supabase.from('daily_checkins')
       .select('energy, stress, soreness')
       .eq('date', today).limit(1),
+
+    // Today's coffee logs — for widget display and insight rules
+    supabase.from('coffee_logs')
+      .select('consumed_at, cups, caffeine_mg')
+      .eq('date', today)
+      .order('consumed_at', { ascending: true }),
   ])
 
   // ── Index by date ─────────────────────────────────────────────────────────
@@ -115,8 +123,27 @@ export default async function TodayPage() {
   const historical = allDays.filter(d => d.date < today)
   const yday = historical.slice(-1)[0] ?? null   // yesterday
 
+  // ── Coffee today ─────────────────────────────────────────────────────────
+  const coffeeLogs    = coffeeRaw ?? []
+  const coffeeCups    = coffeeLogs.reduce((s, l) => s + Number(l.cups), 0)
+  const coffeeMg      = coffeeLogs.reduce((s, l) => s + (l.caffeine_mg ?? 0), 0)
+  const lastCoffeeLog = coffeeLogs.length > 0 ? coffeeLogs[coffeeLogs.length - 1] : null
+  const lastCoffeeTime = lastCoffeeLog
+    ? lastCoffeeLog.consumed_at.slice(11, 16)  // HH:MM from ISO string
+    : null
+  // Hour from consumed_at (treating stored time as local-naive)
+  const lastCoffeeHour = lastCoffeeLog
+    ? parseInt(lastCoffeeLog.consumed_at.slice(11, 13), 10)
+    : null
+
   // ── Run engines ───────────────────────────────────────────────────────────
   const engine = runInsightEngine(allDays, today)
+  const coffeeInsights = generateCoffeeInsights({
+    totalCaffeineMg: coffeeMg > 0 ? coffeeMg : null,
+    lastCoffeeHour,
+  })
+  // Merge coffee insights at the front (warnings) then engine insights
+  const allInsights = [...coffeeInsights, ...engine.insights].slice(0, 5)
   const trendItems   = computeTrendItems(historical)
   const trendSummary = computeTrendSummary(trendItems)
 
@@ -189,6 +216,9 @@ export default async function TodayPage() {
         consumedKcal={consumed}
         proteinG={proteinToday}
         activityMinutes={activityMinutes}
+        coffeeCups={coffeeCups}
+        coffeeMg={coffeeMg > 0 ? coffeeMg : null}
+        lastCoffeeTime={lastCoffeeTime}
       />
 
       {/* Widget 2 — YESTERDAY */}

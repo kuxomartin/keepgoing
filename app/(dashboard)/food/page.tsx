@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { Plus, Pencil } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import type { FoodLog, MealType } from '@/types/database'
+import { CoffeeSummaryCard } from '@/components/coffee/coffee-summary-card'
+import type { FoodLog, MealType, CoffeeLog } from '@/types/database'
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack', 'other']
 const MEAL_LABELS: Record<MealType, string> = {
@@ -30,14 +31,23 @@ export default async function FoodPage({ searchParams }: PageProps) {
 
   const supabase = await createClient()
 
-  const { data: rawLogs } = await supabase
-    .from('food_logs')
-    .select('*')
-    .eq('date', selectedDate)
-    .order('eaten_at', { ascending: true })    // sort by exact time
-    .order('created_at', { ascending: true })  // fallback
+  const [{ data: rawLogs }, { data: coffeeRaw }] = await Promise.all([
+    supabase
+      .from('food_logs')
+      .select('*')
+      .eq('date', selectedDate)
+      .order('eaten_at', { ascending: true })
+      .order('created_at', { ascending: true }),
+
+    supabase
+      .from('coffee_logs')
+      .select('*')
+      .eq('date', selectedDate)
+      .order('consumed_at', { ascending: true }),
+  ])
 
   const logs: FoodLog[] = rawLogs ? (rawLogs as FoodLog[]) : []
+  const coffeeLogs: CoffeeLog[] = coffeeRaw ? (coffeeRaw as CoffeeLog[]) : []
 
   const totalCalories = logs.reduce((sum, f) => sum + (f.estimated_calories ?? 0), 0)
   const totalProtein  = logs.reduce((sum, f) => sum + (f.protein_g ?? 0), 0)
@@ -85,6 +95,9 @@ export default async function FoodPage({ searchParams }: PageProps) {
           {format(new Date(selectedDate + 'T12:00:00'), 'EEE, d MMM yyyy')}
         </span>
       </form>
+
+      {/* Coffee summary */}
+      <CoffeeSummaryCard logs={coffeeLogs} date={selectedDate} />
 
       {/* Daily totals */}
       {logs.length > 0 && (
