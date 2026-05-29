@@ -55,6 +55,8 @@ export interface FoodLog {
   confidence: ConfidenceLevel | null
   digestion_note: string | null
   image_url: string | null
+  /** Data source identifier, e.g. 'historical_import' (migration 009) */
+  source: string | null
   created_at: string
 }
 
