@@ -1,7 +1,6 @@
 /**
  * TODAY widget — hero block at the top of the Today page.
- * Always uses a dark/charcoal background (Oura-like).
- * Status is communicated via a thin top accent bar + colored badge.
+ * Always dark/charcoal. Vitals as a number grid, not chips.
  */
 import { cn } from '@/lib/utils'
 import type { TodayReadiness } from '@/lib/insights/types'
@@ -48,115 +47,93 @@ export function TodayWidget({
   coffeeCups, coffeeMg, lastCoffeeTime,
 }: Props) {
   const s = STATUS[readiness]
-  const hasRecovery  = sleepH != null || hrv != null || rhr != null
   const hasTodayFood = consumedKcal != null || proteinG != null || activityMinutes > 0
   const hasCoffee    = coffeeCups > 0
 
+  // Vitals to show in the hero grid
+  const vitals = [
+    sleepH != null ? { label: 'Sleep', value: sleepH.toFixed(1), unit: 'h',   slug: 'sleep' }           : null,
+    hrv    != null ? { label: 'HRV',   value: String(Math.round(hrv)), unit: 'ms',  slug: 'hrv' }          : null,
+    rhr    != null ? { label: 'RHR',   value: String(rhr), unit: 'bpm', slug: 'resting-heart-rate' }   : null,
+  ].filter((v): v is NonNullable<typeof v> => v !== null)
+
   return (
     <div className="relative rounded-2xl overflow-hidden bg-zinc-950">
-      {/* Status accent bar at top */}
+      {/* Thin status accent at top */}
       <div className={cn('absolute top-0 left-0 right-0 h-0.5', s.bar)} />
 
-      <div className="px-5 pt-5 pb-5 space-y-4">
-        {/* Row 1: label + status badge */}
+      <div className="px-6 pt-6 pb-6 space-y-5">
+
+        {/* Row 1: eyebrow + status badge */}
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-semibold text-white/30 uppercase tracking-widest">
-            Today
+            {usingFallback ? "Yesterday's data" : 'Today'}
           </span>
           <span className={cn('text-[11px] font-bold px-2.5 py-1 rounded-full', s.badge)}>
             {s.label}
           </span>
         </div>
 
-        {/* Row 2: Recovery data chips */}
-        {hasRecovery && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            {usingFallback && (
-              <span className="text-[10px] font-medium text-white/25">Yesterday ·</span>
-            )}
-            {sleepH != null && (
-              <span className="inline-flex items-center gap-0.5 text-xs text-white/60 font-medium">
-                {sleepH.toFixed(1)}h sleep
-                <MetricInfo slug="sleep" />
-              </span>
-            )}
-            {hrv != null && (
-              <span className="inline-flex items-center gap-0.5 text-xs text-white/60 font-medium">
-                HRV {Math.round(hrv)}ms
-                <MetricInfo slug="hrv" />
-              </span>
-            )}
-            {rhr != null && (
-              <span className="inline-flex items-center gap-0.5 text-xs text-white/60 font-medium">
-                RHR {rhr}bpm
-                <MetricInfo slug="resting-heart-rate" />
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Row 3: Main interpretation */}
-        <div className="space-y-1.5">
-          <p className="text-base font-semibold text-white leading-snug">
+        {/* Row 2: main interpretation — large, dominant */}
+        <div className="space-y-2">
+          <p className="text-xl font-bold text-white leading-snug">
             {interpretation}
           </p>
           {supporting.length > 0 && (
             <ul className="space-y-0.5">
               {supporting.map((item, i) => (
-                <li key={i} className="text-xs text-white/40 leading-relaxed">· {item}</li>
+                <li key={i} className="text-sm text-white/40">· {item}</li>
               ))}
             </ul>
           )}
         </div>
 
-        {/* Row 4: Recommendation */}
-        <div className="border-t border-white/8 pt-3.5">
-          <p className="text-sm font-medium text-white/75 leading-relaxed">
-            {recommendation}
-          </p>
-        </div>
+        {/* Row 3: recommendation */}
+        <p className="text-sm text-white/65 leading-relaxed border-t border-white/8 pt-4">
+          {recommendation}
+        </p>
 
-        {/* Row 5: Today's logged data */}
+        {/* Row 4: vitals — number grid */}
+        {vitals.length > 0 && (
+          <div className={cn(
+            'grid gap-5 border-t border-white/8 pt-4',
+            vitals.length === 3 ? 'grid-cols-3'
+            : vitals.length === 2 ? 'grid-cols-2'
+            : 'grid-cols-1',
+          )}>
+            {vitals.map(v => (
+              <div key={v.label}>
+                <p className="text-2xl font-bold text-white tabular-nums leading-none">{v.value}</p>
+                <div className="flex items-center gap-0.5 mt-1">
+                  <span className="text-[10px] text-white/35 uppercase tracking-widest">{v.label} {v.unit}</span>
+                  <MetricInfo slug={v.slug} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Row 5: food + coffee footer (secondary, muted) */}
         {(hasTodayFood || hasCoffee) && (
-          <div className="border-t border-white/8 pt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            {hasTodayFood && (
-              <>
-                <span className="text-[10px] font-medium text-white/25">Food ·</span>
-                {consumedKcal != null && (
-                  <span className="text-xs text-white/45">
-                    {consumedKcal.toLocaleString()} kcal
-                  </span>
-                )}
-                {proteinG != null && (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-white/45">
-                    {Math.round(proteinG)}g protein
-                    <MetricInfo slug="protein" />
-                  </span>
-                )}
-                {activityMinutes > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-white/45">
-                    {activityMinutes}min activity
-                    <MetricInfo slug="training-load" />
-                  </span>
-                )}
-              </>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/8 pt-3">
+            {consumedKcal != null && (
+              <span className="text-xs text-white/35 tabular-nums">{consumedKcal.toLocaleString()} kcal</span>
+            )}
+            {proteinG != null && (
+              <span className="inline-flex items-center gap-0.5 text-xs text-white/35">
+                {Math.round(proteinG)}g protein
+                <MetricInfo slug="protein" />
+              </span>
+            )}
+            {activityMinutes > 0 && (
+              <span className="text-xs text-white/35">{activityMinutes}min active</span>
             )}
             {hasCoffee && (
-              <>
-                {hasTodayFood && <span className="text-white/15">·</span>}
-                <span className="text-xs text-white/45">
-                  ☕ {coffeeCups % 1 === 0 ? coffeeCups : coffeeCups.toFixed(1)} cup{coffeeCups !== 1 ? 's' : ''}
-                </span>
-                {coffeeMg != null && coffeeMg > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-white/45">
-                    {coffeeMg}mg caffeine
-                    <MetricInfo slug="caffeine" />
-                  </span>
-                )}
-                {lastCoffeeTime && (
-                  <span className="text-xs text-white/45">last {lastCoffeeTime}</span>
-                )}
-              </>
+              <span className="text-xs text-white/35">
+                ☕ {coffeeCups % 1 === 0 ? coffeeCups : coffeeCups.toFixed(1)}
+                {coffeeMg != null && coffeeMg > 0 ? ` · ${coffeeMg}mg` : ''}
+                {lastCoffeeTime ? ` · last ${lastCoffeeTime}` : ''}
+              </span>
             )}
           </div>
         )}

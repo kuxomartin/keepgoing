@@ -2,8 +2,6 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { format, subDays, startOfDay, differenceInCalendarDays } from 'date-fns'
-import { MetricTile } from '@/components/ui/metric-tile'
-import { trendColor } from '@/lib/spark-utils'
 import { DailyCheckinForm } from '@/components/dashboard/daily-checkin-form'
 import { QuickAddWeight } from '@/components/dashboard/quick-add-weight'
 import { QuickAddFood } from '@/components/dashboard/quick-add-food'
@@ -20,8 +18,7 @@ import { generateCoffeeInsights } from '@/lib/insights/coffee-rules'
 import { generateDailyRecommendation } from '@/lib/insights/recommendation'
 import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
 import { computeProteinTarget, detectDuckMeat, detectEveningFruit, generateFoodObservationInsights } from '@/lib/profile/food-context'
-import { mockHealthMetrics, mockWeightLogs } from '@/lib/mock-data/demo-data'
-import type { HealthMetrics, WeightLog } from '@/types/database'
+import type { HealthMetrics } from '@/types/database'
 import type { DaySummary } from '@/lib/insights/types'
 import Link from 'next/link'
 import { UtensilsCrossed } from 'lucide-react'
@@ -250,58 +247,13 @@ export default async function TodayPage() {
     personalContext,
   })
 
-  // ── Mock fallback for StatCards only ─────────────────────────────────────
-  const todayMetrics: HealthMetrics | null =
-    realMetrics ?? (mockHealthMetrics.find(m => m.date === today) ?? mockHealthMetrics[0])
-
-  const latestWeightDisplay: WeightLog | null =
-    latestWeightReal
-      ? { id: '', user_id: '', waist_cm: null, body_fat_percent: null, notes: null, created_at: '', ...latestWeightReal }
-      : mockWeightLogs[0]
-
-  const sleepHoursDisplay = todayMetrics?.sleep_minutes
-    ? parseFloat((todayMetrics.sleep_minutes / 60).toFixed(1))
-    : null
-
-  // Sparkline arrays from last 7 historical days
-  const last7       = historical.slice(-7)
-  const hrvSpark    = last7.map(d => d.hrv).filter((v): v is number => v != null)
-  const sleepSpark  = last7.map(d => d.sleepMinutes).filter((v): v is number => v != null).map(m => m / 60)
-  const rhrSpark    = last7.map(d => d.restingHr).filter((v): v is number => v != null)
-  const weightSpark = (weightsRaw ?? []).slice(-7).map((w: { weight_kg: number }) => w.weight_kg)
-
-  const hrvColor    = trendColor(hrvSpark, true)
-  const sleepColor  = trendColor(sleepSpark, true)
-  const rhrColor    = trendColor(rhrSpark, false)
-  const weightColor = trendColor(weightSpark, false)
-
-  // Absolute value status → MetricTile status
-  const hrvStatus: 'green'|'amber'|'red'|'neutral' =
-    todayMetrics?.hrv_ms == null ? 'neutral'
-    : Number(todayMetrics.hrv_ms) >= 55 ? 'green'
-    : Number(todayMetrics.hrv_ms) >= 40 ? 'amber'
-    : 'red'
-  const sleepStatus: 'green'|'amber'|'red'|'neutral' =
-    sleepHoursDisplay == null ? 'neutral'
-    : sleepHoursDisplay >= 7 ? 'green'
-    : sleepHoursDisplay >= 6 ? 'amber'
-    : 'red'
-  const rhrStatus: 'green'|'amber'|'red'|'neutral' =
-    todayMetrics?.resting_hr == null ? 'neutral'
-    : todayMetrics.resting_hr <= 55 ? 'green'
-    : todayMetrics.resting_hr <= 65 ? 'amber'
-    : 'red'
 
   return (
     <div className="space-y-4">
       {/* Date header */}
-      <div>
-        <p className="text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">{longDate}</p>
-      </div>
+      <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">{longDate}</p>
 
-      {/* ━━━ THREE PRIMARY WIDGETS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-
-      {/* Widget 1 — TODAY */}
+      {/* ━━━ HERO — TODAY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <TodayWidget
         readiness={engine.todayReadiness}
         interpretation={engine.todayInterpretation}
@@ -319,58 +271,36 @@ export default async function TodayPage() {
         lastCoffeeTime={lastCoffeeTime}
       />
 
-      {/* Widget 2 — YESTERDAY */}
-      <YesterdayWidget yday={yday} calBase7d={calBase7d} />
-
-      {/* Widget 3 — RECENT TREND */}
-      <TrendWidget
-        items={trendItems}
-        interpretation={trendSummary.interpretation}
-        recommendation={trendSummary.recommendation}
-      />
-
       {/* ━━━ RECOMMENDATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <RecommendationCard rec={dailyRec} />
 
-      {/* ━━━ METRIC TILES (sparklines) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <div className="grid grid-cols-4 gap-2">
-        <MetricTile
-          label="HRV"    unit="ms" tooltipSlug="hrv"
-          value={todayMetrics?.hrv_ms != null ? Math.round(Number(todayMetrics.hrv_ms)) : '—'}
-          sparkValues={hrvSpark}   sparkColor={hrvColor}   status={hrvStatus}
-        />
-        <MetricTile
-          label="Sleep"  unit="h"  tooltipSlug="sleep"
-          value={sleepHoursDisplay ?? '—'}
-          sparkValues={sleepSpark} sparkColor={sleepColor} status={sleepStatus}
-        />
-        <MetricTile
-          label="RHR"    unit="bpm" tooltipSlug="resting-heart-rate"
-          value={todayMetrics?.resting_hr ?? '—'}
-          sparkValues={rhrSpark}   sparkColor={rhrColor}   status={rhrStatus}
-        />
-        <MetricTile
-          label="Weight" unit="kg"  tooltipSlug="weight"
-          value={latestWeightDisplay ? latestWeightDisplay.weight_kg.toFixed(1) : '—'}
-          sparkValues={weightSpark} sparkColor={weightColor} status="neutral"
-        />
+      {/* ━━━ CONTEXT: Yesterday + Trend — combined flat panel ━━━━━━━━━━━━━━ */}
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 divide-y divide-gray-100 dark:divide-zinc-800">
+        <div className="px-5 py-4">
+          <YesterdayWidget yday={yday} calBase7d={calBase7d} />
+        </div>
+        <div className="px-5 py-4">
+          <TrendWidget
+            items={trendItems}
+            interpretation={trendSummary.interpretation}
+            recommendation={trendSummary.recommendation}
+          />
+        </div>
       </div>
 
+      {/* ━━━ QUICK ACTIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* Add Meal shortcut (mobile) */}
       <Link
         href="/food/add?from=today"
-        className="lg:hidden flex items-center justify-between bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 px-5 py-4 hover:border-blue-300 dark:hover:border-blue-500/40 transition-all group"
+        className="lg:hidden flex items-center justify-between bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 px-5 py-4 hover:border-blue-200 dark:hover:border-blue-500/30 transition-all group"
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-50 dark:bg-blue-500/10 rounded-xl flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-500/20 transition-colors">
-            <UtensilsCrossed className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          <div className="w-9 h-9 bg-blue-50 dark:bg-blue-500/10 rounded-xl flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-500/20 transition-colors">
+            <UtensilsCrossed className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Log a meal</p>
-            <p className="text-xs text-gray-400 dark:text-zinc-500">Tap to add food</p>
-          </div>
+          <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Log a meal</p>
         </div>
-        <span className="text-blue-600 dark:text-blue-400 font-semibold text-lg">+</span>
+        <span className="text-blue-500 dark:text-blue-400 font-semibold text-lg leading-none">+</span>
       </Link>
 
       <QuickActionsPanel />

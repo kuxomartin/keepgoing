@@ -2,11 +2,11 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { format, subDays, startOfDay } from 'date-fns'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardContent } from '@/components/ui/card'
 import { CalorieBalanceChart, type DayBalance } from '@/components/charts/calorie-balance-chart'
 import { computeBalance, fmtKcal } from '@/lib/calculations/calorie-balance'
 import { MetricInfo } from '@/components/ui/metric-info'
-import { Flame, Beef, Wheat, Droplets, Clock } from 'lucide-react'
+import { Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
 import { computeProteinTarget } from '@/lib/profile/food-context'
@@ -15,50 +15,6 @@ function avg(vals: (number | null)[]): number | null {
   const nums = vals.filter((v): v is number => v != null)
   if (!nums.length) return null
   return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length)
-}
-
-function MacroBar({
-  label, value, unit, color, target, icon,
-}: {
-  label: string; value: number | null; unit: string
-  color: string; target?: number | null; icon: React.ReactNode
-}) {
-  const pct = target && value ? Math.min(100, Math.round((value / target) * 100)) : null
-  const reached = pct != null && pct >= 100
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          {icon}
-          <span className="text-xs font-medium text-gray-500 dark:text-zinc-400">{label}</span>
-        </div>
-        <div className="flex items-baseline gap-1">
-          <span className={cn('text-lg font-bold tabular-nums', color)}>
-            {value != null ? `${Math.round(value)}g` : '—'}
-          </span>
-          {target && (
-            <span className={cn(
-              'text-xs font-medium',
-              reached ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-zinc-500',
-            )}>
-              / {target}g
-            </span>
-          )}
-        </div>
-      </div>
-      {pct != null && (
-        <div className="h-1.5 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-          <div
-            className={cn(
-              'h-full rounded-full transition-all',
-              reached ? 'bg-emerald-500' : color.includes('blue') ? 'bg-blue-500' : 'bg-amber-500',
-            )}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      )}
-    </div>
-  )
 }
 
 export default async function NutritionPage() {
@@ -142,202 +98,185 @@ export default async function NutritionPage() {
   const todayCarbs   = todayFood ? Math.round(todayFood.carbs)   : null
   const todayFat     = todayFood ? Math.round(todayFood.fat)     : null
 
+  // Protein progress
+  const proteinPct = proteinTarget.grams && todayProtein
+    ? Math.min(100, Math.round((todayProtein / proteinTarget.grams) * 100))
+    : null
+  const proteinReached = proteinPct != null && proteinPct >= 100
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-50">Nutrition</h1>
-        <p className="text-sm text-gray-400 dark:text-zinc-500 mt-0.5">Calorie balance and macro trends</p>
-      </div>
+    <div className="space-y-8">
+      {/* Page header */}
+      <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Nutrition</p>
 
-      {/* Today balance card */}
-      <Card className={cn('border-l-4', burnAvailable ? todayBalance.borderColor : 'border-l-gray-200 dark:border-l-zinc-700')}>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Flame className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
-            <CardTitle>Today&apos;s Balance</CardTitle>
-            <MetricInfo slug="calorie-balance" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          {burnAvailable ? (
-            <>
-              <div className="grid grid-cols-3 gap-4 text-center mb-4">
-                <div>
-                  <p className="text-xs text-gray-400 dark:text-zinc-500 mb-1">Consumed</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-zinc-50 tabular-nums">{fmtKcal(todayConsumed)}</p>
-                  <p className="text-xs text-gray-400 dark:text-zinc-500">kcal</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 dark:text-zinc-500 mb-1">Burned</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-zinc-50 tabular-nums">{fmtKcal(todayBalance.burned)}</p>
-                  {todayActive != null && (
-                    <p className="text-xs text-gray-400 dark:text-zinc-500">{fmtKcal(todayActive)} active</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 dark:text-zinc-500 mb-1">Balance</p>
-                  <p className={cn('text-3xl font-bold tabular-nums', todayBalance.textColor)}>
-                    {todayBalance.statusLabel}
-                  </p>
-                </div>
-              </div>
-              <p className={cn('text-sm font-medium text-center py-2 rounded-xl', {
-                'bg-green-50  dark:bg-green-500/10  text-green-700  dark:text-green-400':  todayBalance.color === 'green',
-                'bg-blue-50   dark:bg-blue-500/10   text-blue-700   dark:text-blue-400':   todayBalance.color === 'blue',
-                'bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400': todayBalance.color === 'orange',
-                'bg-red-50    dark:bg-red-500/10    text-red-700    dark:text-red-400':    todayBalance.color === 'red',
-                'bg-gray-50   dark:bg-zinc-800      text-gray-500   dark:text-zinc-400':   todayBalance.color === 'neutral',
-              })}>
-                {todayBalance.helpText}
-              </p>
-            </>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <p className="text-xs text-gray-400 dark:text-zinc-500 mb-1">Consumed</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-zinc-50 tabular-nums">{fmtKcal(todayConsumed)}</p>
-                  <p className="text-xs text-gray-400 dark:text-zinc-500">kcal</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 dark:text-zinc-500 mb-1">Burned</p>
-                  <p className="text-3xl font-bold text-gray-300 dark:text-zinc-600">—</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-400 dark:text-zinc-500 mb-1">Balance</p>
-                  <p className="text-3xl font-bold text-gray-300 dark:text-zinc-600">—</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 justify-center bg-gray-50 dark:bg-zinc-800 rounded-xl py-2.5 px-4">
-                <Clock className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500 flex-shrink-0" />
-                <p className="text-sm text-gray-500 dark:text-zinc-400">Waiting for Apple Health energy data</p>
-              </div>
+      {/* ── TODAY HERO ──────────────────────────────────────────────────────── */}
+      <div className="space-y-5">
+
+        {/* Calorie hero — dominant number */}
+        <div>
+          <div className="flex items-end gap-3">
+            <p className="text-6xl font-black text-gray-900 dark:text-zinc-50 tabular-nums leading-none">
+              {todayConsumed != null ? fmtKcal(todayConsumed) : '—'}
+            </p>
+            <div className="pb-1.5">
+              <p className="text-sm text-gray-400 dark:text-zinc-500">kcal today</p>
+              {burnAvailable && (
+                <p className={cn('text-sm font-semibold', todayBalance.textColor)}>
+                  {todayBalance.statusLabel} balance
+                </p>
+              )}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
 
-      {/* Today macros — progress bars */}
-      {(todayProtein != null || todayCarbs != null || todayFat != null) && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Today&apos;s Macros</CardTitle>
-              <div className="text-right">
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 dark:text-blue-400">
-                  Protein target: {proteinTarget.grams} g
-                  <MetricInfo slug="protein-target" />
-                </span>
+          {!burnAvailable && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-400 dark:text-zinc-500">
+              <Clock className="h-3.5 w-3.5 flex-shrink-0" />
+              Burn data pending from Apple Health
+            </p>
+          )}
+
+          {burnAvailable && (
+            <p className="mt-1.5 text-sm text-gray-500 dark:text-zinc-400">
+              {fmtKcal(todayBalance.burned)} burned
+              {todayActive != null && ` · ${fmtKcal(todayActive)} active`}
+            </p>
+          )}
+        </div>
+
+        {/* Macros — flat, no card */}
+        {(todayProtein != null || todayCarbs != null || todayFat != null) && (
+          <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-zinc-800">
+
+            {/* Protein — with target */}
+            {todayProtein != null && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-gray-800 dark:text-zinc-200">Protein</span>
+                    <MetricInfo slug="protein" />
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-lg font-bold text-blue-600 dark:text-blue-400 tabular-nums">{todayProtein}g</span>
+                    {proteinTarget.grams && (
+                      <span className={cn(
+                        'text-sm font-medium',
+                        proteinReached ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-zinc-500',
+                      )}>/ {proteinTarget.grams}g</span>
+                    )}
+                  </div>
+                </div>
+                {proteinPct != null && (
+                  <div className="h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <div
+                      className={cn('h-full rounded-full transition-all', proteinReached ? 'bg-emerald-500' : 'bg-blue-500')}
+                      style={{ width: `${proteinPct}%` }}
+                    />
+                  </div>
+                )}
                 {proteinTarget.source === 'profile' && (
-                  <p className="text-[10px] text-gray-400 dark:text-zinc-500">
-                    from health profile · {proteinTarget.gPerKg} g/kg
+                  <p className="text-[10px] text-gray-400 dark:text-zinc-600 mt-1">
+                    {proteinTarget.gPerKg} g/kg · from health profile
                   </p>
                 )}
               </div>
+            )}
+
+            {/* Carbs + Fat — side by side, no target bar */}
+            <div className="grid grid-cols-2 gap-4">
+              {todayCarbs != null && (
+                <div>
+                  <p className="text-xs text-gray-400 dark:text-zinc-500 mb-0.5">Carbs</p>
+                  <p className="text-2xl font-bold text-amber-500 dark:text-amber-400 tabular-nums">{todayCarbs}<span className="text-sm font-normal ml-0.5">g</span></p>
+                </div>
+              )}
+              {todayFat != null && (
+                <div>
+                  <p className="text-xs text-gray-400 dark:text-zinc-500 mb-0.5">Fat</p>
+                  <p className="text-2xl font-bold text-orange-500 dark:text-orange-400 tabular-nums">{todayFat}<span className="text-sm font-normal ml-0.5">g</span></p>
+                </div>
+              )}
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <MacroBar
-              label="Protein" value={todayProtein} unit="g" target={proteinTarget.grams}
-              color="text-blue-600 dark:text-blue-400"
-              icon={<Beef className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />}
-            />
-            <MacroBar
-              label="Carbs" value={todayCarbs} unit="g"
-              color="text-amber-500 dark:text-amber-400"
-              icon={<Wheat className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" />}
-            />
-            <MacroBar
-              label="Fat" value={todayFat} unit="g"
-              color="text-orange-500 dark:text-orange-400"
-              icon={<Droplets className="h-3.5 w-3.5 text-orange-500 dark:text-orange-400" />}
-            />
+          </div>
+        )}
+      </div>
+
+      {/* ── 7-DAY CHART ─────────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-3 mb-3">
+          <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">7-Day history</p>
+          <MetricInfo slug="calorie-balance" />
+        </div>
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800">
+          <CardContent className="px-2 pb-4 pt-4">
+            <CalorieBalanceChart data={chartData} />
           </CardContent>
-        </Card>
-      )}
+        </div>
 
-      {/* 7-day chart */}
-      <Card>
-        <CardHeader><CardTitle>7-Day Calorie History</CardTitle></CardHeader>
-        <CardContent className="px-2 pb-4">
-          <CalorieBalanceChart data={chartData} />
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 justify-center text-xs text-gray-400 dark:text-zinc-500 px-3">
-            <span>🔵 Consumed  🟢 Burned  🟠 Balance (line)</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 7-day averages — grid of 4 */}
-      <Card>
-        <CardHeader><CardTitle>7-Day Averages</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'Avg consumed', value: fmtKcal(avgConsumed), sub: 'kcal / day', color: 'text-blue-600 dark:text-blue-400' },
-              { label: 'Avg burned',   value: fmtKcal(avgBurned),   sub: 'kcal / day', color: 'text-emerald-600 dark:text-emerald-400' },
-              {
-                label: 'Avg balance',
-                value: avgBalance != null ? `${avgBalance > 0 ? '+' : ''}${fmtKcal(avgBalance)}` : '—',
-                sub: 'kcal / day',
-                color: avgBalance == null ? 'text-gray-400 dark:text-zinc-500'
-                  : avgBalance > 150 ? 'text-rose-600 dark:text-rose-400'
+        {/* Averages — inline below chart */}
+        {(avgConsumed || avgBurned || avgProtein) && (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 px-1">
+            {avgConsumed != null && (
+              <p className="text-xs text-gray-400 dark:text-zinc-500">
+                Avg consumed: <span className="font-semibold text-gray-700 dark:text-zinc-300">{fmtKcal(avgConsumed)}</span>
+              </p>
+            )}
+            {avgBurned != null && (
+              <p className="text-xs text-gray-400 dark:text-zinc-500">
+                Avg burned: <span className="font-semibold text-gray-700 dark:text-zinc-300">{fmtKcal(avgBurned)}</span>
+              </p>
+            )}
+            {avgBalance != null && (
+              <p className="text-xs text-gray-400 dark:text-zinc-500">
+                Avg balance: <span className={cn(
+                  'font-semibold',
+                  avgBalance > 150 ? 'text-rose-600 dark:text-rose-400'
                   : avgBalance < -800 ? 'text-orange-600 dark:text-orange-400'
-                  : 'text-gray-900 dark:text-zinc-50',
-              },
-              { label: 'Avg protein', value: avgProtein != null ? `${avgProtein}g` : '—', sub: 'per day', color: 'text-blue-600 dark:text-blue-400' },
-            ].map(({ label, value, sub, color }) => (
-              <div key={label} className="bg-gray-50 dark:bg-zinc-800 rounded-xl px-4 py-3">
-                <p className="text-xs text-gray-400 dark:text-zinc-500 mb-1">{label}</p>
-                <p className={cn('text-xl font-bold tabular-nums', color)}>{value}</p>
-                <p className="text-xs text-gray-400 dark:text-zinc-500">{sub}</p>
-              </div>
-            ))}
+                  : 'text-gray-700 dark:text-zinc-300',
+                )}>{avgBalance > 0 ? '+' : ''}{fmtKcal(avgBalance)}</span>
+              </p>
+            )}
+            {avgProtein != null && (
+              <p className="text-xs text-gray-400 dark:text-zinc-500">
+                Avg protein: <span className="font-semibold text-gray-700 dark:text-zinc-300">{avgProtein}g</span>
+              </p>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
-      {/* Daily breakdown table */}
-      <Card>
-        <CardHeader><CardTitle>Daily Breakdown</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 dark:border-zinc-800">
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wide">Date</th>
-                  <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wide">Consumed</th>
-                  <th className="text-right px-3 py-2.5 text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wide">Burned</th>
-                  <th className="text-right px-5 py-2.5 text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wide">Balance</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-zinc-800">
-                {[...dates].reverse().map(date => {
-                  const m = metricsByDate[date]
-                  const f = foodByDate[date]
-                  const c = f?.calories ?? null
-                  const b = m ? ((m.active ?? 0) + (m.resting ?? 0)) || null : null
-                  const bal = c != null && b != null ? c - b : null
-                  const { textColor } = computeBalance(c, m?.active ?? null, m?.resting ?? null)
-                  const isToday = date === today
-                  return (
-                    <tr key={date} className={isToday ? 'bg-blue-50/50 dark:bg-blue-500/5' : 'hover:bg-gray-50 dark:hover:bg-zinc-800/50'}>
-                      <td className="px-5 py-3 text-gray-700 dark:text-zinc-300 font-medium">
-                        {format(new Date(date + 'T12:00:00'), 'EEE, d MMM')}
-                        {isToday && <span className="ml-2 text-xs text-blue-600 dark:text-blue-400 font-medium">Today</span>}
-                      </td>
-                      <td className="px-3 py-3 text-right text-gray-600 dark:text-zinc-400 tabular-nums">{fmtKcal(c)}</td>
-                      <td className="px-3 py-3 text-right text-gray-600 dark:text-zinc-400 tabular-nums">{fmtKcal(b)}</td>
-                      <td className={cn('px-5 py-3 text-right font-semibold tabular-nums', bal != null ? textColor : 'text-gray-300 dark:text-zinc-600')}>
-                        {bal != null ? `${bal > 0 ? '+' : ''}${bal.toLocaleString()}` : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* ── DAILY BREAKDOWN — compact, de-emphasized ─────────────────────────── */}
+      <div>
+        <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-3">Daily breakdown</p>
+        <div className="divide-y divide-gray-100 dark:divide-zinc-800">
+          {[...dates].reverse().map(date => {
+            const m = metricsByDate[date]
+            const f = foodByDate[date]
+            const c = f?.calories ?? null
+            const b = m ? ((m.active ?? 0) + (m.resting ?? 0)) || null : null
+            const bal = c != null && b != null ? c - b : null
+            const { textColor } = computeBalance(c, m?.active ?? null, m?.resting ?? null)
+            const isToday = date === today
+            return (
+              <div key={date} className={cn(
+                'flex items-center justify-between py-2.5 px-1',
+                isToday && 'text-blue-600 dark:text-blue-400',
+              )}>
+                <p className={cn('text-sm', isToday ? 'font-semibold text-gray-900 dark:text-zinc-100' : 'text-gray-500 dark:text-zinc-400')}>
+                  {format(new Date(date + 'T12:00:00'), 'EEE, d MMM')}
+                  {isToday && <span className="ml-1.5 text-[10px] font-bold text-blue-500 uppercase tracking-widest">Today</span>}
+                </p>
+                <div className="flex items-center gap-4 text-xs tabular-nums">
+                  <span className="text-gray-600 dark:text-zinc-400">{fmtKcal(c)}</span>
+                  <span className="text-gray-400 dark:text-zinc-600 w-14 text-right">{fmtKcal(b)}</span>
+                  <span className={cn('w-16 text-right font-medium', bal != null ? textColor : 'text-gray-300 dark:text-zinc-700')}>
+                    {bal != null ? `${bal > 0 ? '+' : ''}${bal.toLocaleString()}` : '—'}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

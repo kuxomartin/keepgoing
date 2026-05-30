@@ -1,6 +1,6 @@
 /**
- * YESTERDAY widget.
- * Tier 2 card — white/zinc-900 surface, no heavy border.
+ * YESTERDAY widget — flat, cardless. Renders as content, not a card.
+ * Wrapping container is provided by the Today page.
  */
 import { cn } from '@/lib/utils'
 import type { DaySummary } from '@/lib/insights/types'
@@ -109,18 +109,7 @@ function interpret(
 }
 
 export function YesterdayWidget({ yday, calBase7d }: Props) {
-  if (!yday) {
-    return (
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 dark:border-zinc-800">
-          <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Yesterday</span>
-        </div>
-        <div className="px-5 py-4">
-          <p className="text-sm text-gray-400 dark:text-zinc-500">No data available for yesterday.</p>
-        </div>
-      </div>
-    )
-  }
+  if (!yday) return null
 
   const { interpretation, recommendation } = interpret(yday, calBase7d)
 
@@ -131,65 +120,43 @@ export function YesterdayWidget({ yday, calBase7d }: Props) {
   const balance = yday.calories != null && burned != null && burned > 0
     ? yday.calories - burned : null
 
-  const nutritionChips = [
-    yday.calories != null && `${fmt(yday.calories)} kcal`,
-    burned != null && burned > 0 && `${fmt(burned)} burned`,
-    balance != null && `${balance > 0 ? '+' : ''}${fmt(balance)} balance`,
-  ].filter(Boolean) as string[]
-
-  const macroChips = [
-    yday.protein != null && `${Math.round(yday.protein)}g protein`,
-  ].filter(Boolean) as string[]
-
-  const activityChips = [
-    yday.activityMinutes > 0 && `${Math.round(yday.activityMinutes)} min activity`,
-  ].filter(Boolean) as string[]
-
-  const borderColor =
-    balance == null ? 'border-l-gray-200 dark:border-l-zinc-700' :
-    balance > 500   ? 'border-l-amber-400' :
-    balance < -700  ? 'border-l-blue-400' :
-    'border-l-gray-200 dark:border-l-zinc-700'
+  const accentColor =
+    balance == null     ? 'bg-gray-300 dark:bg-zinc-600' :
+    balance > 500       ? 'bg-amber-400'                  :
+    balance < -700      ? 'bg-blue-400'                   :
+    'bg-gray-300 dark:bg-zinc-600'
 
   return (
-    <div className={cn(
-      'bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 border-l-4 overflow-hidden',
-      borderColor,
-    )}>
-      <div className="px-5 py-3 border-b border-gray-100 dark:border-zinc-800">
+    <div className="flex gap-3.5">
+      {/* Vertical accent line */}
+      <div className={cn('w-0.5 self-stretch rounded-full flex-shrink-0 min-h-[16px]', accentColor)} />
+
+      <div className="flex-1 min-w-0 space-y-1.5">
         <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Yesterday</span>
-      </div>
 
-      <div className="px-5 py-4 space-y-3">
-        {/* Hard data */}
-        <div className="space-y-0.5">
-          {nutritionChips.length > 0 && (
-            <div className="flex flex-wrap gap-x-2.5 gap-y-1">
-              {nutritionChips.map(chip => (
-                <span key={chip} className="text-xs text-gray-700 dark:text-zinc-300 font-medium">{chip}</span>
-              ))}
-            </div>
-          )}
-          {(macroChips.length > 0 || activityChips.length > 0) && (
-            <div className="flex flex-wrap gap-x-2.5 gap-y-1">
-              {[...macroChips, ...activityChips].map(chip => (
-                <span key={chip} className="text-xs text-gray-500 dark:text-zinc-400">{chip}</span>
-              ))}
-            </div>
-          )}
-          {nutritionChips.length === 0 && macroChips.length === 0 && activityChips.length === 0 && (
-            <p className="text-xs text-gray-400 dark:text-zinc-500">No data logged</p>
-          )}
-        </div>
+        {/* Data chips */}
+        {(yday.calories != null || balance != null || yday.activityMinutes > 0) && (
+          <div className="flex flex-wrap gap-x-2.5 gap-y-0.5">
+            {yday.calories != null && (
+              <span className="text-sm font-semibold text-gray-800 dark:text-zinc-200 tabular-nums">{fmt(yday.calories)} kcal</span>
+            )}
+            {balance != null && (
+              <span className="text-sm text-gray-500 dark:text-zinc-400 tabular-nums">
+                {balance > 0 ? '+' : ''}{fmt(balance)} balance
+              </span>
+            )}
+            {yday.protein != null && (
+              <span className="text-sm text-gray-500 dark:text-zinc-400">{Math.round(yday.protein)}g protein</span>
+            )}
+            {yday.activityMinutes > 0 && (
+              <span className="text-sm text-gray-500 dark:text-zinc-400">{Math.round(yday.activityMinutes)} min active</span>
+            )}
+          </div>
+        )}
 
-        {/* Interpretation */}
-        <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100 leading-snug">{interpretation}</p>
-
-        {/* Recommendation */}
+        <p className="text-sm font-medium text-gray-700 dark:text-zinc-300 leading-snug">{interpretation}</p>
         {recommendation && (
-          <p className="text-sm text-gray-600 dark:text-zinc-400 border-t border-gray-100 dark:border-zinc-800 pt-3 leading-relaxed">
-            {recommendation}
-          </p>
+          <p className="text-sm text-gray-500 dark:text-zinc-400 leading-relaxed">{recommendation}</p>
         )}
       </div>
     </div>
