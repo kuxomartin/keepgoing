@@ -16,6 +16,7 @@
  */
 
 import type { DaySummary } from './types'
+import type { PersonalContextSummary } from '@/lib/profile/context-loader'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,9 @@ export interface RecommendationInput {
 
   // Targets
   proteinTargetG:  number            // hardcoded until settings exist
+
+  // Optional personal context (from personal_context_facts)
+  personalContext?: PersonalContextSummary
 }
 
 // Status → display label (used by RecommendationCard)
@@ -87,6 +91,7 @@ export function generateDailyRecommendation(input: RecommendationInput): DailyRe
     historical, yday,
     weeklyActivityMins, daysSinceLastBike,
     proteinTargetG,
+    personalContext,
   } = input
 
   // ── Pre-compute balances ────────────────────────────────────────────────
@@ -210,7 +215,7 @@ export function generateDailyRecommendation(input: RecommendationInput): DailyRe
     }
     const bikeDue = daysSinceLastBike != null && daysSinceLastBike >= 4
 
-    return {
+    return applyContext({
       status:  'deficit',
       title:   'Deficit trend is on track.',
       reasons,
@@ -219,7 +224,7 @@ export function generateDailyRecommendation(input: RecommendationInput): DailyRe
           ? `Stay consistent. Last bike was ${daysSinceLastBike} days ago — a ride fits well.`
           : 'Stay consistent. No need to overcorrect today.',
       confidence: bal7d.length >= 5 ? 'high' : 'medium',
-    }
+    }, personalContext, avg7d)
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -266,26 +271,26 @@ export function generateDailyRecommendation(input: RecommendationInput): DailyRe
     if (avg7d != null && avg7d > 0) {
       reasons.push('A longer ride would also help bring energy balance toward neutral.')
     }
-    return {
+    return applyContext({
       status:     'train',
       title:      'A bike session is overdue.',
       reasons,
       action:     'Plan 90–120 min at an easy to moderate effort.',
       confidence: 'medium',
-    }
+    }, personalContext, avg7d)
   }
 
   // ────────────────────────────────────────────────────────────────────────
   // Fallback: not enough trend data yet
   // ────────────────────────────────────────────────────────────────────────
   if (!hasEnoughData) {
-    return {
+    return applyContext({
       status:     'neutral',
       title:      'Not enough trend data yet.',
       reasons:    ['Log a few more days of food and activity to unlock recommendations.'],
       action:     "Use today's calories and protein as the main guide.",
       confidence: 'low',
-    }
+    }, personalContext, avg7d)
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -306,7 +311,7 @@ export function generateDailyRecommendation(input: RecommendationInput): DailyRe
     )
   }
 
-  return {
+  return applyContext({
     status:     'neutral',
     title:      'No strong signal today.',
     reasons:    neutralReasons.length
@@ -314,5 +319,43 @@ export function generateDailyRecommendation(input: RecommendationInput): DailyRe
       : ['All key metrics are within normal range.'],
     action:     'Continue with your planned training and eating.',
     confidence: 'low',
+  }, personalContext, avg7d)
+}
+
+// ── Personal context enrichment ───────────────────────────────────────────────
+// Applied after rule resolution. Max one context addition to keep the card tight.
+
+function applyContext(
+  rec:     DailyRecommendation,
+  ctx:     PersonalContextSummary | undefined,
+  avg7d:   number | null,
+): DailyRecommendation {
+  if (!ctx) return rec
+
+  // Rule C1: warm-up reminder when recommending training, if ACL/Achilles flag set
+  if (
+    (rec.status === 'train' || rec.status === 'deficit') &&
+    (ctx.hasAclPredisposition || ctx.hasAchillesPredisposition)
+  ) {
+    return {
+      ...rec,
+      action: rec.action + ' Warm up thoroughly before the session — your profile includes a tendon predisposition note.',
+    }
   }
+
+  // Rule C2: reference goal weight when discussing deficit trend or surplus
+  if (
+    (rec.status === 'deficit' || rec.status === 'easy') &&
+    ctx.weightGoalKg != null
+  ) {
+    const goalNote = `Goal weight: ${ctx.weightGoalKg} kg.`
+    if (!rec.reasons.some(r => r.includes('goal'))) {
+      return {
+        ...rec,
+        reasons: [...rec.reasons, goalNote],
+      }
+    }
+  }
+
+  return rec
 }

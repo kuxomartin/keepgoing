@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "import:personal-context": "tsx scripts/import-personal-context.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

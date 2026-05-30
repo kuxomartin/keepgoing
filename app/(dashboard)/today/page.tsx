@@ -17,6 +17,7 @@ import { computeBaselines } from '@/lib/insights/baselines'
 import { computeTrendItems, computeTrendSummary } from '@/lib/insights/trends'
 import { generateCoffeeInsights } from '@/lib/insights/coffee-rules'
 import { generateDailyRecommendation } from '@/lib/insights/recommendation'
+import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
 import { mockHealthMetrics, mockWeightLogs } from '@/lib/mock-data/demo-data'
 import type { HealthMetrics, WeightLog } from '@/types/database'
 import type { DaySummary } from '@/lib/insights/types'
@@ -56,7 +57,7 @@ export default async function TodayPage() {
   const d30ago   = format(subDays(startOfDay(new Date()), 29), 'yyyy-MM-dd')
   const d14ago   = format(subDays(startOfDay(new Date()), 13), 'yyyy-MM-dd')
 
-  // 6 parallel fetches — wider windows for insight engine
+  // 7 parallel fetches — wider windows for insight engine
   const [
     { data: metricsRaw },
     { data: foodRaw },
@@ -64,6 +65,7 @@ export default async function TodayPage() {
     { data: activitiesRaw },
     { data: checkinRaw },
     { data: coffeeRaw },
+    personalContext,
   ] = await Promise.all([
     supabase.from('health_metrics')
       .select('date, hrv_ms, resting_hr, sleep_minutes, steps, active_energy_kcal, resting_energy_kcal')
@@ -91,6 +93,9 @@ export default async function TodayPage() {
       .select('consumed_at, cups, caffeine_mg')
       .eq('date', today)
       .order('consumed_at', { ascending: true }),
+
+    // Personal context (gracefully returns EMPTY_CONTEXT if table is empty)
+    loadPersonalContextSummary(supabase),
   ])
 
   // ── Index by date ─────────────────────────────────────────────────────────
@@ -218,6 +223,7 @@ export default async function TodayPage() {
     weeklyActivityMins,
     daysSinceLastBike,
     proteinTargetG:     140,
+    personalContext,
   })
 
   // ── Mock fallback for StatCards only ─────────────────────────────────────
