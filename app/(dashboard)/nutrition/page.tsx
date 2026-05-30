@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CalorieBalanceChart, type DayBalance } from '@/components/charts/calorie-balance-chart'
 import { computeBalance, fmtKcal } from '@/lib/calculations/calorie-balance'
 import { Flame, Beef, Wheat, Droplets, Clock } from 'lucide-react'
+import { MetricInfo } from '@/components/ui/metric-info'
 import { cn } from '@/lib/utils'
 import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
 import { computeProteinTarget } from '@/lib/profile/food-context'
@@ -129,6 +130,7 @@ export default async function NutritionPage() {
           <div className="flex items-center gap-2">
             <Flame className="h-4 w-4 text-gray-400" />
             <CardTitle>Today&apos;s Balance</CardTitle>
+            <MetricInfo slug="calorie-balance" />
           </div>
         </CardHeader>
         <CardContent>
@@ -202,8 +204,9 @@ export default async function NutritionPage() {
             <div className="flex items-center justify-between">
               <CardTitle>Today&apos;s Macros</CardTitle>
               <div className="text-right">
-                <span className="text-xs font-medium text-blue-700">
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700">
                   Protein target: {proteinTarget.grams} g
+                  <MetricInfo slug="protein-target" />
                 </span>
                 {proteinTarget.source === 'profile' && (
                   <p className="text-[10px] text-gray-400">
@@ -218,8 +221,9 @@ export default async function NutritionPage() {
               <div className="space-y-1">
                 <div className="flex justify-center"><Beef className="h-4 w-4 text-blue-500" /></div>
                 <p className="text-2xl font-bold text-blue-600">{todayProtein ?? '—'}g</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
                   Protein
+                  <MetricInfo slug="protein" />
                   {todayProtein != null && (
                     <span className={cn(
                       'ml-1 font-medium',

@@ -11,6 +11,7 @@ import { mockWeightLogs } from '@/lib/mock-data/demo-data'
 import type { WeightLog } from '@/types/database'
 import type { WeightChartPoint } from '@/components/charts/weight-chart'
 import { Scale, Target } from 'lucide-react'
+import { MetricInfo } from '@/components/ui/metric-info'
 import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
 
 export default async function WeightPage() {
@@ -103,6 +104,7 @@ export default async function WeightPage() {
       <div className="grid grid-cols-3 gap-3">
         <StatCard
           label="Current"
+          tooltipSlug="weight"
           value={latest ? latest.weight_kg.toFixed(1) : '—'}
           unit={latest ? 'kg' : ''}
           subtitle={latest ? format(new Date(latest.date), 'd MMM') : undefined}
@@ -124,7 +126,10 @@ export default async function WeightPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Weight trend</CardTitle>
+            <div className="flex items-center gap-1.5">
+              <CardTitle>Weight trend</CardTitle>
+              <MetricInfo slug="weight-trend" />
+            </div>
             <div className="flex items-center gap-4 text-xs text-gray-400">
               <span className="flex items-center gap-1">
                 <span className="w-3 h-0.5 bg-gray-300 inline-block" /> Daily

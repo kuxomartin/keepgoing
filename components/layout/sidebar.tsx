@@ -13,6 +13,7 @@ import {
   LogOut,
   Flame,
   Coffee,
+  BookOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/weight',    label: 'Weight',     icon: Scale },
   { href: '/recovery',  label: 'Recovery',   icon: Heart },
   { href: '/coach',     label: 'Coach',      icon: Brain },
+  { href: '/metrics',   label: 'Metrics',    icon: BookOpen },
   { href: '/settings',  label: 'Settings',   icon: Settings },
 ]
 

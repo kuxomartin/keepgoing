@@ -11,12 +11,16 @@ import { explainActivityDifficulty } from '@/lib/insights/activity-difficulty'
 import { mockActivities, mockHealthMetrics } from '@/lib/mock-data/demo-data'
 import type { Activity, HealthMetrics } from '@/types/database'
 import { ChevronLeft } from 'lucide-react'
+import { MetricInfo } from '@/components/ui/metric-info'
 
-function StatRow({ label, value }: { label: string; value: string | number | null }) {
+function StatRow({ label, value, tooltipSlug }: { label: string; value: string | number | null; tooltipSlug?: string }) {
   if (value === null || value === undefined) return null
   return (
     <div className="flex justify-between py-2 border-b border-gray-100 last:border-0">
-      <span className="text-sm text-gray-500">{label}</span>
+      <span className="flex items-center gap-1 text-sm text-gray-500">
+        {label}
+        {tooltipSlug && <MetricInfo slug={tooltipSlug} />}
+      </span>
       <span className="text-sm font-medium text-gray-900">{value}</span>
     </div>
   )
@@ -102,12 +106,12 @@ export default async function ActivityDetailPage({ params }: PageProps) {
           <CardTitle>Session stats</CardTitle>
         </CardHeader>
         <CardContent className="py-2">
-          <StatRow label="Duration" value={formatDuration(activity.duration_minutes)} />
-          <StatRow label="Distance" value={activity.distance_km ? `${activity.distance_km.toFixed(2)} km` : null} />
-          <StatRow label="Elevation" value={activity.elevation_gain_m ? `${activity.elevation_gain_m} m` : null} />
-          <StatRow label="Avg heart rate" value={activity.avg_hr ? `${activity.avg_hr} bpm` : null} />
-          <StatRow label="Max heart rate" value={activity.max_hr ? `${activity.max_hr} bpm` : null} />
-          <StatRow label="Avg power" value={activity.avg_power ? `${activity.avg_power} W` : null} />
+          <StatRow label="Duration"      value={formatDuration(activity.duration_minutes)}                        tooltipSlug="duration" />
+          <StatRow label="Distance"      value={activity.distance_km ? `${activity.distance_km.toFixed(2)} km` : null} tooltipSlug="distance" />
+          <StatRow label="Elevation"     value={activity.elevation_gain_m ? `${activity.elevation_gain_m} m` : null}   tooltipSlug="elevation-gain" />
+          <StatRow label="Avg heart rate" value={activity.avg_hr ? `${activity.avg_hr} bpm` : null}                    tooltipSlug="heart-rate" />
+          <StatRow label="Max heart rate" value={activity.max_hr ? `${activity.max_hr} bpm` : null}                    tooltipSlug="heart-rate" />
+          <StatRow label="Avg power"     value={activity.avg_power ? `${activity.avg_power} W` : null}                 tooltipSlug="average-power" />
           <StatRow label="Calories" value={activity.calories ? `${activity.calories} kcal` : null} />
           <StatRow label="Perceived effort" value={activity.perceived_effort ? `${activity.perceived_effort}/10` : null} />
         </CardContent>

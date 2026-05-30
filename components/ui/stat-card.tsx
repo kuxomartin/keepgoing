@@ -1,10 +1,12 @@
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from './card'
+import { MetricInfo } from './metric-info'
 
 type StatusColor = 'green' | 'yellow' | 'red' | 'neutral' | 'blue'
 
 interface StatCardProps {
   label: string
+  tooltipSlug?: string
   value: string | number
   unit?: string
   subtitle?: string
@@ -15,6 +17,7 @@ interface StatCardProps {
 
 export function StatCard({
   label,
+  tooltipSlug,
   value,
   unit,
   subtitle,
@@ -35,9 +38,12 @@ export function StatCard({
       <CardContent className="py-5">
         <div className="flex items-start justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide truncate">
-              {label}
-            </p>
+            <div className="flex items-center gap-1">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide truncate">
+                {label}
+              </p>
+              {tooltipSlug && <MetricInfo slug={tooltipSlug} />}
+            </div>
             <p className="mt-1 text-2xl font-bold text-gray-900 leading-none">
               {value}
               {unit && (

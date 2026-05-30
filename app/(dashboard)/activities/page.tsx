@@ -10,6 +10,7 @@ import { weeklyActivityTotals } from '@/lib/calculations/weekly-totals'
 import { mockActivities } from '@/lib/mock-data/demo-data'
 import type { Activity } from '@/types/database'
 import { ChevronRight, Bike, PersonStanding, Swords, CircleDot, Mountain, Dumbbell, Footprints } from 'lucide-react'
+import { MetricInfo } from '@/components/ui/metric-info'
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
   ride: <Bike className="h-4 w-4" />,
@@ -92,7 +93,10 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
       {/* Weekly chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Training volume by week</CardTitle>
+          <div className="flex items-center gap-1.5">
+            <CardTitle>Training volume by week</CardTitle>
+            <MetricInfo slug="training-load" />
+          </div>
         </CardHeader>
         <CardContent>
           <ActivityDurationChart data={weeklyTotals} />

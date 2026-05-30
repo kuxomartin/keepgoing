@@ -12,6 +12,7 @@ import { sevenDayAverage } from '@/lib/calculations/weekly-totals'
 import { mockHealthMetrics } from '@/lib/mock-data/demo-data'
 import type { HealthMetrics } from '@/types/database'
 import { Moon, Heart, Zap, Footprints, AlertCircle, CheckCircle } from 'lucide-react'
+import { MetricInfo } from '@/components/ui/metric-info'
 
 // Priority order for deduplicating same-date rows from multiple sources
 const SOURCE_PRIORITY = ['google_sheets', 'apple_health_export', 'manual', 'mock']
@@ -130,6 +131,7 @@ export default async function RecoveryPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Sleep last night"
+          tooltipSlug="sleep"
           value={todayMetrics?.sleep_minutes ? (todayMetrics.sleep_minutes / 60).toFixed(1) : '—'}
           unit={todayMetrics?.sleep_minutes ? 'h' : ''}
           subtitle={avg7dSleep ? `7d avg: ${avg7dSleep}h` : undefined}
@@ -140,6 +142,7 @@ export default async function RecoveryPage() {
         />
         <StatCard
           label="HRV"
+          tooltipSlug="hrv"
           value={todayMetrics?.hrv_ms != null ? Math.round(Number(todayMetrics.hrv_ms)) : '—'}
           unit={todayMetrics?.hrv_ms != null ? 'ms' : ''}
           subtitle={avg7dHrv ? `7d avg: ${avg7dHrv} ms` : undefined}
@@ -150,6 +153,7 @@ export default async function RecoveryPage() {
         />
         <StatCard
           label="Resting HR"
+          tooltipSlug="resting-heart-rate"
           value={todayMetrics?.resting_hr ?? '—'}
           unit={todayMetrics?.resting_hr ? 'bpm' : ''}
           subtitle={avg7dRhr ? `7d avg: ${avg7dRhr} bpm` : undefined}
@@ -160,6 +164,7 @@ export default async function RecoveryPage() {
         />
         <StatCard
           label="Steps today"
+          tooltipSlug="steps"
           value={todayMetrics?.steps ? todayMetrics.steps.toLocaleString() : '—'}
           subtitle={todayMetrics?.steps ? (todayMetrics.steps >= 10000 ? 'Target reached ✓' : `${10000 - todayMetrics.steps} to go`) : undefined}
           status={todayMetrics?.steps
@@ -188,7 +193,10 @@ export default async function RecoveryPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle>HRV trend</CardTitle>
+            <div className="flex items-center gap-1.5">
+              <CardTitle>HRV trend</CardTitle>
+              <MetricInfo slug="hrv" />
+            </div>
           </CardHeader>
           <CardContent>
             <HrvChart data={hrvData} />
@@ -196,7 +204,10 @@ export default async function RecoveryPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Resting HR trend</CardTitle>
+            <div className="flex items-center gap-1.5">
+              <CardTitle>Resting HR trend</CardTitle>
+              <MetricInfo slug="resting-heart-rate" />
+            </div>
           </CardHeader>
           <CardContent>
             <RestingHrChart data={rhrData} />

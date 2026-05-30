@@ -309,6 +309,7 @@ export default async function TodayPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label="Weight"
+          tooltipSlug="weight"
           value={latestWeightDisplay ? latestWeightDisplay.weight_kg.toFixed(1) : '—'}
           unit={latestWeightDisplay ? 'kg' : ''}
           subtitle={latestWeightDisplay ? `Last: ${latestWeightDisplay.date}` : 'Not logged yet'}
@@ -316,6 +317,7 @@ export default async function TodayPage() {
         />
         <StatCard
           label="Sleep"
+          tooltipSlug="sleep"
           value={sleepHoursDisplay ?? '—'}
           unit={sleepHoursDisplay ? 'h' : ''}
           subtitle={todayMetrics?.deep_sleep_minutes
@@ -328,6 +330,7 @@ export default async function TodayPage() {
         />
         <StatCard
           label="Resting HR"
+          tooltipSlug="resting-heart-rate"
           value={todayMetrics?.resting_hr ?? '—'}
           unit={todayMetrics?.resting_hr ? 'bpm' : ''}
           status={todayMetrics?.resting_hr
@@ -337,6 +340,7 @@ export default async function TodayPage() {
         />
         <StatCard
           label="HRV"
+          tooltipSlug="hrv"
           value={todayMetrics?.hrv_ms != null ? Math.round(Number(todayMetrics.hrv_ms)) : '—'}
           unit={todayMetrics?.hrv_ms != null ? 'ms' : ''}
           status={todayMetrics?.hrv_ms != null
