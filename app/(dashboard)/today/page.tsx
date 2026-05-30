@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
-import { format, subDays, startOfDay } from 'date-fns'
+import { format, subDays, startOfDay, differenceInCalendarDays } from 'date-fns'
 import { StatCard } from '@/components/ui/stat-card'
 import { DailyCheckinForm } from '@/components/dashboard/daily-checkin-form'
 import { QuickAddWeight } from '@/components/dashboard/quick-add-weight'
@@ -11,9 +11,12 @@ import { QuickActionsPanel } from '@/components/dashboard/quick-actions-panel'
 import { TodayWidget } from '@/components/dashboard/today-widget'
 import { YesterdayWidget } from '@/components/dashboard/yesterday-widget'
 import { TrendWidget } from '@/components/dashboard/trend-widget'
+import { RecommendationCard } from '@/components/dashboard/recommendation-card'
 import { runInsightEngine } from '@/lib/insights/engine'
+import { computeBaselines } from '@/lib/insights/baselines'
 import { computeTrendItems, computeTrendSummary } from '@/lib/insights/trends'
 import { generateCoffeeInsights } from '@/lib/insights/coffee-rules'
+import { generateDailyRecommendation } from '@/lib/insights/recommendation'
 import { mockHealthMetrics, mockWeightLogs } from '@/lib/mock-data/demo-data'
 import type { HealthMetrics, WeightLog } from '@/types/database'
 import type { DaySummary } from '@/lib/insights/types'
@@ -25,7 +28,7 @@ import { Scale, Moon, Heart, Zap, UtensilsCrossed } from 'lucide-react'
 function buildDaySummaries(
   dateRange: string[],
   metricsByDate: Record<string, HealthMetrics>,
-  foodByDate: Record<string, { calories: number; protein: number }>,
+  foodByDate: Record<string, { calories: number; protein: number; fat: number; carbs: number }>,
   weightByDate: Record<string, number>,
   actMins: Record<string, number>,
 ): DaySummary[] {
@@ -67,7 +70,7 @@ export default async function TodayPage() {
       .gte('date', d30ago).lte('date', today).order('date', { ascending: true }),
 
     supabase.from('food_logs')
-      .select('date, estimated_calories, protein_g')
+      .select('date, estimated_calories, protein_g, fat_g, carbs_g')
       .gte('date', d14ago).lte('date', today),
 
     supabase.from('weight_logs')
@@ -75,8 +78,8 @@ export default async function TodayPage() {
       .gte('date', d30ago).lte('date', today).order('date', { ascending: true }),
 
     supabase.from('activities')
-      .select('start_time, duration_minutes')
-      .gte('start_time', d14ago + 'T00:00:00')
+      .select('start_time, duration_minutes, activity_type')
+      .gte('start_time', d30ago + 'T00:00:00')
       .lte('start_time', today  + 'T23:59:59'),
 
     supabase.from('daily_checkins')
@@ -94,11 +97,13 @@ export default async function TodayPage() {
   const metricsByDate: Record<string, HealthMetrics> = {}
   for (const r of metricsRaw ?? []) metricsByDate[r.date] = r as HealthMetrics
 
-  const foodByDate: Record<string, { calories: number; protein: number }> = {}
+  const foodByDate: Record<string, { calories: number; protein: number; fat: number; carbs: number }> = {}
   for (const r of foodRaw ?? []) {
-    if (!foodByDate[r.date]) foodByDate[r.date] = { calories: 0, protein: 0 }
+    if (!foodByDate[r.date]) foodByDate[r.date] = { calories: 0, protein: 0, fat: 0, carbs: 0 }
     foodByDate[r.date].calories += r.estimated_calories ?? 0
     foodByDate[r.date].protein  += r.protein_g         ?? 0
+    foodByDate[r.date].fat      += r.fat_g             ?? 0
+    foodByDate[r.date].carbs    += r.carbs_g           ?? 0
   }
 
   const weightByDate: Record<string, number> = {}
@@ -152,9 +157,10 @@ export default async function TodayPage() {
   const todayFood   = foodByDate[today] ?? null
   const checkin     = checkinRaw?.[0] ?? null
 
-  const consumed        = todayFood?.calories    ?? null
-  const proteinToday    = todayFood?.protein     ?? null
-  const activityMinutes = actMins[today]         ?? 0
+  const consumed        = todayFood?.calories ?? null
+  const proteinToday    = todayFood?.protein  ?? null
+  const fatToday        = todayFood?.fat      ?? null
+  const activityMinutes = actMins[today]      ?? 0
 
   // Recovery metrics for TodayWidget:
   // If today has no Apple Health data, fall back to the most recent historical day
@@ -179,6 +185,40 @@ export default async function TodayPage() {
       .filter((v): v is number => v != null && v > 400)
     return vals.length >= 3 ? vals.reduce((a, b) => a + b, 0) / vals.length : null
   })()
+
+  // ── Recommendation engine inputs ─────────────────────────────────────────
+  const baselines = computeBaselines(historical)
+
+  // Days since last bike ride (activity_type = 'ride'), within 30-day window
+  const bikeRides = (activitiesRaw ?? [])
+    .filter((r): r is typeof r & { activity_type: string } => r.activity_type === 'ride')
+    .map(r => r.start_time.slice(0, 10))
+    .sort()
+    .reverse()
+
+  const daysSinceLastBike: number | null = bikeRides.length > 0
+    ? differenceInCalendarDays(new Date(), new Date(bikeRides[0] + 'T12:00:00'))
+    : null
+
+  // Weekly activity minutes (last 7 days including today)
+  const d7ago = format(subDays(startOfDay(new Date()), 6), 'yyyy-MM-dd')
+  const weeklyActivityMins = Object.entries(actMins)
+    .filter(([d]) => d >= d7ago && d <= today)
+    .reduce((sum, [, mins]) => sum + mins, 0)
+
+  const dailyRec = generateDailyRecommendation({
+    todayHrv:           realMetrics?.hrv_ms       != null ? Number(realMetrics.hrv_ms) : null,
+    hrv14dBaseline:     baselines.hrv14d,
+    todaySleepH:        widgetSleepH,
+    consumedKcal:       consumed,
+    proteinG:           proteinToday,
+    fatG:               fatToday,
+    historical,
+    yday,
+    weeklyActivityMins,
+    daysSinceLastBike,
+    proteinTargetG:     140,
+  })
 
   // ── Mock fallback for StatCards only ─────────────────────────────────────
   const todayMetrics: HealthMetrics | null =
@@ -230,6 +270,9 @@ export default async function TodayPage() {
         interpretation={trendSummary.interpretation}
         recommendation={trendSummary.recommendation}
       />
+
+      {/* ━━━ RECOMMENDATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <RecommendationCard rec={dailyRec} />
 
       {/* ━━━ SECONDARY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
 
