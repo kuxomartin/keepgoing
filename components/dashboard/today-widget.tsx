@@ -6,6 +6,7 @@
  */
 import { cn } from '@/lib/utils'
 import type { TodayReadiness } from '@/lib/insights/types'
+import { MetricInfo } from '@/components/ui/metric-info'
 
 interface Props {
   readiness: TodayReadiness
@@ -34,21 +35,18 @@ const STATUS = {
     dot:    'bg-green-500',
     badge:  'bg-green-100 text-green-700',
     label:  'Go',
-    bg:     '',
   },
   moderate: {
     border: 'border-l-yellow-400',
     dot:    'bg-yellow-400',
     badge:  'bg-yellow-100 text-yellow-700',
     label:  'Take it easy',
-    bg:     '',
   },
   rest: {
     border: 'border-l-red-400',
     dot:    'bg-red-400',
     badge:  'bg-red-100 text-red-700',
     label:  'Rest day',
-    bg:     '',
   },
 } as const
 
@@ -59,23 +57,9 @@ export function TodayWidget({
 }: Props) {
   const s = STATUS[readiness]
 
-  const recoveryChips = [
-    sleepH  != null && `${sleepH.toFixed(1)}h sleep`,
-    hrv     != null && `HRV ${Math.round(hrv)}ms`,
-    rhr     != null && `RHR ${rhr}bpm`,
-  ].filter(Boolean) as string[]
-
-  const todayChips = [
-    consumedKcal    != null && `${consumedKcal.toLocaleString()} kcal`,
-    proteinG        != null && `${Math.round(proteinG)}g protein`,
-    activityMinutes > 0     && `${activityMinutes}min activity`,
-  ].filter(Boolean) as string[]
-
-  const coffeeChips = [
-    coffeeCups > 0         && `☕ ${coffeeCups % 1 === 0 ? coffeeCups : coffeeCups.toFixed(1)} cup${coffeeCups !== 1 ? 's' : ''}`,
-    coffeeMg   != null && coffeeMg > 0 && `${coffeeMg}mg caffeine`,
-    lastCoffeeTime         && `last ${lastCoffeeTime}`,
-  ].filter(Boolean) as string[]
+  const hasRecovery   = sleepH != null || hrv != null || rhr != null
+  const hasTodayFood  = consumedKcal != null || proteinG != null || activityMinutes > 0
+  const hasCoffee     = coffeeCups > 0
 
   return (
     <div className={cn(
@@ -94,15 +78,34 @@ export function TodayWidget({
       </div>
 
       <div className="px-5 py-4 space-y-3.5">
-        {/* ① Hard data — recovery metrics */}
-        {recoveryChips.length > 0 && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
+
+        {/* ① Hard data — recovery metrics with info icons */}
+        {hasRecovery && (
+          <div className="flex flex-wrap gap-x-3 gap-y-1 items-center">
             {usingFallback && (
-              <span className="text-[10px] text-gray-400 font-medium self-center">Yesterday ·</span>
+              <span className="text-[10px] text-gray-400 font-medium">Yesterday ·</span>
             )}
-            {recoveryChips.map(chip => (
-              <span key={chip} className="text-xs text-gray-600 font-medium">{chip}</span>
-            ))}
+
+            {sleepH != null && (
+              <span className="inline-flex items-center gap-0.5 text-xs text-gray-600 font-medium">
+                {sleepH.toFixed(1)}h sleep
+                <MetricInfo slug="sleep" />
+              </span>
+            )}
+
+            {hrv != null && (
+              <span className="inline-flex items-center gap-0.5 text-xs text-gray-600 font-medium">
+                HRV {Math.round(hrv)}ms
+                <MetricInfo slug="hrv" />
+              </span>
+            )}
+
+            {rhr != null && (
+              <span className="inline-flex items-center gap-0.5 text-xs text-gray-600 font-medium">
+                RHR {rhr}bpm
+                <MetricInfo slug="resting-heart-rate" />
+              </span>
+            )}
           </div>
         )}
 
@@ -123,25 +126,59 @@ export function TodayWidget({
           {recommendation}
         </p>
 
-        {/* Today's logged data (so far) */}
-        {(todayChips.length > 0 || coffeeChips.length > 0) && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1.5 border-t border-gray-100 pt-2.5">
-            {todayChips.length > 0 && (
+        {/* Today's logged data (food + coffee) */}
+        {(hasTodayFood || hasCoffee) && (
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 border-t border-gray-100 pt-2.5 items-center">
+
+            {/* Food / activity */}
+            {hasTodayFood && (
               <>
-                <span className="text-[10px] text-gray-400 font-medium self-center">Food ·</span>
-                {todayChips.map(chip => (
-                  <span key={chip} className="text-xs text-gray-500">{chip}</span>
-                ))}
+                <span className="text-[10px] text-gray-400 font-medium">Food ·</span>
+
+                {consumedKcal != null && (
+                  <span className="text-xs text-gray-500">
+                    {consumedKcal.toLocaleString()} kcal
+                  </span>
+                )}
+
+                {proteinG != null && (
+                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-500">
+                    {Math.round(proteinG)}g protein
+                    <MetricInfo slug="protein" />
+                  </span>
+                )}
+
+                {activityMinutes > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-500">
+                    {activityMinutes}min activity
+                    <MetricInfo slug="training-load" />
+                  </span>
+                )}
               </>
             )}
-            {coffeeChips.length > 0 && (
+
+            {/* Coffee */}
+            {hasCoffee && (
               <>
-                {todayChips.length > 0 && <span className="text-gray-200 self-center">·</span>}
-                {coffeeChips.map(chip => (
-                  <span key={chip} className="text-xs text-gray-500">{chip}</span>
-                ))}
+                {hasTodayFood && <span className="text-gray-200">·</span>}
+
+                <span className="text-xs text-gray-500">
+                  ☕ {coffeeCups % 1 === 0 ? coffeeCups : coffeeCups.toFixed(1)} cup{coffeeCups !== 1 ? 's' : ''}
+                </span>
+
+                {coffeeMg != null && coffeeMg > 0 && (
+                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-500">
+                    {coffeeMg}mg caffeine
+                    <MetricInfo slug="caffeine" />
+                  </span>
+                )}
+
+                {lastCoffeeTime && (
+                  <span className="text-xs text-gray-500">last {lastCoffeeTime}</span>
+                )}
               </>
             )}
+
           </div>
         )}
       </div>
