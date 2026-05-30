@@ -7,6 +7,7 @@ import { Plus, Pencil } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CoffeeSummaryCard } from '@/components/coffee/coffee-summary-card'
+import { DateNavStrip } from '@/components/food/date-nav-strip'
 import type { FoodLog, MealType, CoffeeLog } from '@/types/database'
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack', 'other']
@@ -77,24 +78,8 @@ export default async function FoodPage({ searchParams }: PageProps) {
         </Link>
       </div>
 
-      {/* Date picker */}
-      <form className="flex items-center gap-3 flex-wrap">
-        <input
-          type="date"
-          name="date"
-          defaultValue={selectedDate}
-          className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          type="submit"
-          className="px-3 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-        >
-          Go
-        </button>
-        <span className="text-sm text-gray-500">
-          {format(new Date(selectedDate + 'T12:00:00'), 'EEE, d MMM yyyy')}
-        </span>
-      </form>
+      {/* Date navigation */}
+      <DateNavStrip selectedDate={selectedDate} />
 
       {/* Coffee summary */}
       <CoffeeSummaryCard logs={coffeeLogs} date={selectedDate} />
