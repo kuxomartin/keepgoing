@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ImportManager } from '@/components/settings/import-manager'
 import { ImportLogTable } from '@/components/settings/import-log-table'
+import { ThemeToggle } from '@/components/settings/theme-toggle'
 import { Activity, FileText, Table2, User } from 'lucide-react'
 import Link from 'next/link'
 
@@ -11,11 +12,21 @@ export default async function SettingsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-50">Settings</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
           Configure data sources and manage automated imports.
         </p>
       </div>
+
+      {/* ── Appearance ── */}
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-zinc-100">Appearance</h2>
+        <Card>
+          <CardContent className="py-4">
+            <ThemeToggle />
+          </CardContent>
+        </Card>
+      </section>
 
       {/* ── Data Sources ── */}
       <section className="space-y-4">

@@ -1,29 +1,36 @@
 @import "tailwindcss";
 
+/* Selector-based dark mode: responds to .dark class on <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --font-sans: var(--font-inter);
 }
 
+/* ── Design token overrides ────────────────────────────────────────────────── */
 :root {
-  --status-green: #16a34a;
-  --status-yellow: #ca8a04;
-  --status-red: #dc2626;
+  --status-green:  #10b981;
+  --status-amber:  #f59e0b;
+  --status-red:    #f43f5e;
+  --status-blue:   #3b82f6;
 }
 
-/* Safe area utilities for iOS notch/home bar */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
+/* ── Safe area utilities (iOS) ─────────────────────────────────────────────── */
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.mb-safe  { margin-bottom:  env(safe-area-inset-bottom, 0px); }
 
-.mb-safe {
-  margin-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* Range slider — larger thumb on mobile for easier grabbing */
+/* ── Range slider ──────────────────────────────────────────────────────────── */
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: #2563eb;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+input[type='range']::-moz-range-thumb {
+  width: 20px; height: 20px;
   border-radius: 50%;
   background: #2563eb;
   cursor: pointer;
@@ -31,12 +38,6 @@ input[type='range']::-webkit-slider-thumb {
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
-input[type='range']::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #2563eb;
-  cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
+/* ── Scrollbar (dark mode, webkit) ─────────────────────────────────────────── */
+.dark ::-webkit-scrollbar { background: #18181b; }
+.dark ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }

@@ -1,23 +1,16 @@
 /**
  * YESTERDAY widget.
- * Answers: "What happened yesterday, and does today need adjustment?"
- *
- * Principle: never judge intake alone.
- * Always evaluates: consumed + burn + activity load + recent baseline.
- *
- * Structure: hard data → interpretation → recommendation
+ * Tier 2 card — white/zinc-900 surface, no heavy border.
  */
 import { cn } from '@/lib/utils'
 import type { DaySummary } from '@/lib/insights/types'
 
 interface Props {
   yday: DaySummary | null
-  calBase7d: number | null   // 7-day consumed baseline for context
+  calBase7d: number | null
 }
 
 function fmt(n: number): string { return Math.round(n).toLocaleString() }
-
-// ── Context-aware interpretation logic ─────────────────────────────────────────
 
 function interpret(
   yday: DaySummary,
@@ -33,13 +26,12 @@ function interpret(
       ? yday.calories - burned
       : null
 
-  const hasActivity   = yday.activityMinutes > 20
-  const intakeHigh    = yday.calories != null && calBase7d != null && yday.calories > calBase7d * 1.2
+  const hasActivity    = yday.activityMinutes > 20
+  const intakeHigh     = yday.calories != null && calBase7d != null && yday.calories > calBase7d * 1.2
   const intakeRelRatio = yday.calories != null && calBase7d != null
     ? Math.round((yday.calories / calBase7d - 1) * 100)
     : null
 
-  // ── Balance available ───────────────────────────────────────────────────
   if (balance != null) {
     if (balance > 500) {
       if (hasActivity && yday.activityMinutes > 60) {
@@ -72,7 +64,6 @@ function interpret(
       }
     }
 
-    // Healthy range: −700 to +500
     if (hasActivity) {
       return {
         interpretation:
@@ -92,7 +83,6 @@ function interpret(
     }
   }
 
-  // ── Consumed but no burn data ───────────────────────────────────────────
   if (yday.calories != null && yday.calories > 200) {
     if (hasActivity) {
       return {
@@ -108,7 +98,6 @@ function interpret(
     }
   }
 
-  // ── Activity only, no food logged ──────────────────────────────────────
   if (hasActivity) {
     return {
       interpretation: `${Math.round(yday.activityMinutes)} min of activity. No food logged.`,
@@ -116,24 +105,18 @@ function interpret(
     }
   }
 
-  // ── Nothing useful ─────────────────────────────────────────────────────
-  return {
-    interpretation: 'No data logged for yesterday.',
-    recommendation: '',
-  }
+  return { interpretation: 'No data logged for yesterday.', recommendation: '' }
 }
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export function YesterdayWidget({ yday, calBase7d }: Props) {
   if (!yday) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 border-l-4 border-l-gray-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Yesterday</span>
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100 dark:border-zinc-800">
+          <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Yesterday</span>
         </div>
         <div className="px-5 py-4">
-          <p className="text-sm text-gray-400">No data available for yesterday.</p>
+          <p className="text-sm text-gray-400 dark:text-zinc-500">No data available for yesterday.</p>
         </div>
       </div>
     )
@@ -146,69 +129,65 @@ export function YesterdayWidget({ yday, calBase7d }: Props) {
       ? (yday.activeEnergy ?? 0) + (yday.restingEnergy ?? 0)
       : null
   const balance = yday.calories != null && burned != null && burned > 0
-    ? yday.calories - burned
-    : null
+    ? yday.calories - burned : null
 
-  // Data chips
   const nutritionChips = [
-    yday.calories   != null && `${fmt(yday.calories)} kcal consumed`,
-    burned          != null && burned > 0 && `${fmt(burned)} kcal burned`,
-    balance         != null && `${balance > 0 ? '+' : ''}${fmt(balance)} balance`,
+    yday.calories != null && `${fmt(yday.calories)} kcal`,
+    burned != null && burned > 0 && `${fmt(burned)} burned`,
+    balance != null && `${balance > 0 ? '+' : ''}${fmt(balance)} balance`,
   ].filter(Boolean) as string[]
 
   const macroChips = [
-    yday.protein    != null && `${Math.round(yday.protein)}g protein`,
+    yday.protein != null && `${Math.round(yday.protein)}g protein`,
   ].filter(Boolean) as string[]
 
   const activityChips = [
     yday.activityMinutes > 0 && `${Math.round(yday.activityMinutes)} min activity`,
   ].filter(Boolean) as string[]
 
-  // Border colour based on balance context
   const borderColor =
-    balance == null ? 'border-l-gray-200' :
-    balance > 500   ? 'border-l-orange-400' :
+    balance == null ? 'border-l-gray-200 dark:border-l-zinc-700' :
+    balance > 500   ? 'border-l-amber-400' :
     balance < -700  ? 'border-l-blue-400' :
-    'border-l-gray-300'
+    'border-l-gray-200 dark:border-l-zinc-700'
 
   return (
     <div className={cn(
-      'bg-white rounded-xl border border-gray-200 border-l-4 shadow-sm overflow-hidden',
+      'bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 border-l-4 overflow-hidden',
       borderColor,
     )}>
-      {/* Header */}
-      <div className="px-5 py-3 border-b border-gray-100">
-        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Yesterday</span>
+      <div className="px-5 py-3 border-b border-gray-100 dark:border-zinc-800">
+        <span className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Yesterday</span>
       </div>
 
-      <div className="px-5 py-4 space-y-3.5">
-        {/* ① Hard data */}
-        <div className="space-y-1">
+      <div className="px-5 py-4 space-y-3">
+        {/* Hard data */}
+        <div className="space-y-0.5">
           {nutritionChips.length > 0 && (
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
+            <div className="flex flex-wrap gap-x-2.5 gap-y-1">
               {nutritionChips.map(chip => (
-                <span key={chip} className="text-xs text-gray-700 font-medium">{chip}</span>
+                <span key={chip} className="text-xs text-gray-700 dark:text-zinc-300 font-medium">{chip}</span>
               ))}
             </div>
           )}
           {(macroChips.length > 0 || activityChips.length > 0) && (
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
+            <div className="flex flex-wrap gap-x-2.5 gap-y-1">
               {[...macroChips, ...activityChips].map(chip => (
-                <span key={chip} className="text-xs text-gray-500">{chip}</span>
+                <span key={chip} className="text-xs text-gray-500 dark:text-zinc-400">{chip}</span>
               ))}
             </div>
           )}
           {nutritionChips.length === 0 && macroChips.length === 0 && activityChips.length === 0 && (
-            <p className="text-xs text-gray-400">No data logged</p>
+            <p className="text-xs text-gray-400 dark:text-zinc-500">No data logged</p>
           )}
         </div>
 
-        {/* ② Interpretation */}
-        <p className="text-sm font-semibold text-gray-900 leading-snug">{interpretation}</p>
+        {/* Interpretation */}
+        <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100 leading-snug">{interpretation}</p>
 
-        {/* ③ Recommendation */}
+        {/* Recommendation */}
         {recommendation && (
-          <p className="text-sm font-medium text-gray-700 border-t border-gray-100 pt-3">
+          <p className="text-sm text-gray-600 dark:text-zinc-400 border-t border-gray-100 dark:border-zinc-800 pt-3 leading-relaxed">
             {recommendation}
           </p>
         )}

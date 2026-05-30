@@ -1,8 +1,7 @@
 /**
- * TODAY widget — top of the Today page.
- * Answers: "How am I today, and what should I do?"
- *
- * Structure: hard data → interpretation → recommendation
+ * TODAY widget — hero block at the top of the Today page.
+ * Always uses a dark/charcoal background (Oura-like).
+ * Status is communicated via a thin top accent bar + colored badge.
  */
 import { cn } from '@/lib/utils'
 import type { TodayReadiness } from '@/lib/insights/types'
@@ -10,43 +9,36 @@ import { MetricInfo } from '@/components/ui/metric-info'
 
 interface Props {
   readiness: TodayReadiness
-  interpretation: string  // "HRV is 12% above baseline."
-  recommendation: string  // "A hard session is on the table today."
-  supporting: string[]    // evidence bullets
-  usingFallback: boolean  // data from yesterday, not today
-
-  // Hard data — recovery
+  interpretation: string
+  recommendation: string
+  supporting: string[]
+  usingFallback: boolean
   sleepH: number | null
   hrv: number | null
   rhr: number | null
-  // Hard data — today's logged
   consumedKcal: number | null
   proteinG: number | null
   activityMinutes: number
-  // Coffee
   coffeeCups: number
   coffeeMg: number | null
-  lastCoffeeTime: string | null  // HH:MM
+  lastCoffeeTime: string | null
 }
 
 const STATUS = {
   go: {
-    border: 'border-l-green-500',
-    dot:    'bg-green-500',
-    badge:  'bg-green-100 text-green-700',
-    label:  'Go',
+    bar:   'bg-emerald-500',
+    badge: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30',
+    label: 'Ready to train',
   },
   moderate: {
-    border: 'border-l-yellow-400',
-    dot:    'bg-yellow-400',
-    badge:  'bg-yellow-100 text-yellow-700',
-    label:  'Take it easy',
+    bar:   'bg-amber-400',
+    badge: 'bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/30',
+    label: 'Take it easy',
   },
   rest: {
-    border: 'border-l-red-400',
-    dot:    'bg-red-400',
-    badge:  'bg-red-100 text-red-700',
-    label:  'Rest day',
+    bar:   'bg-rose-500',
+    badge: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30',
+    label: 'Rest day',
   },
 } as const
 
@@ -56,52 +48,46 @@ export function TodayWidget({
   coffeeCups, coffeeMg, lastCoffeeTime,
 }: Props) {
   const s = STATUS[readiness]
-
-  const hasRecovery   = sleepH != null || hrv != null || rhr != null
-  const hasTodayFood  = consumedKcal != null || proteinG != null || activityMinutes > 0
-  const hasCoffee     = coffeeCups > 0
+  const hasRecovery  = sleepH != null || hrv != null || rhr != null
+  const hasTodayFood = consumedKcal != null || proteinG != null || activityMinutes > 0
+  const hasCoffee    = coffeeCups > 0
 
   return (
-    <div className={cn(
-      'bg-white rounded-xl border border-gray-200 border-l-4 shadow-sm overflow-hidden',
-      s.border,
-    )}>
-      {/* Header */}
-      <div className="px-5 py-3 flex items-center justify-between border-b border-gray-100">
-        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Today</span>
-        <div className="flex items-center gap-1.5">
-          <div className={cn('h-1.5 w-1.5 rounded-full', s.dot)} />
-          <span className={cn('text-[11px] font-bold px-2 py-0.5 rounded-full', s.badge)}>
+    <div className="relative rounded-2xl overflow-hidden bg-zinc-950">
+      {/* Status accent bar at top */}
+      <div className={cn('absolute top-0 left-0 right-0 h-0.5', s.bar)} />
+
+      <div className="px-5 pt-5 pb-5 space-y-4">
+        {/* Row 1: label + status badge */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-widest">
+            Today
+          </span>
+          <span className={cn('text-[11px] font-bold px-2.5 py-1 rounded-full', s.badge)}>
             {s.label}
           </span>
         </div>
-      </div>
 
-      <div className="px-5 py-4 space-y-3.5">
-
-        {/* ① Hard data — recovery metrics with info icons */}
+        {/* Row 2: Recovery data chips */}
         {hasRecovery && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1 items-center">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {usingFallback && (
-              <span className="text-[10px] text-gray-400 font-medium">Yesterday ·</span>
+              <span className="text-[10px] font-medium text-white/25">Yesterday ·</span>
             )}
-
             {sleepH != null && (
-              <span className="inline-flex items-center gap-0.5 text-xs text-gray-600 font-medium">
+              <span className="inline-flex items-center gap-0.5 text-xs text-white/60 font-medium">
                 {sleepH.toFixed(1)}h sleep
                 <MetricInfo slug="sleep" />
               </span>
             )}
-
             {hrv != null && (
-              <span className="inline-flex items-center gap-0.5 text-xs text-gray-600 font-medium">
+              <span className="inline-flex items-center gap-0.5 text-xs text-white/60 font-medium">
                 HRV {Math.round(hrv)}ms
                 <MetricInfo slug="hrv" />
               </span>
             )}
-
             {rhr != null && (
-              <span className="inline-flex items-center gap-0.5 text-xs text-gray-600 font-medium">
+              <span className="inline-flex items-center gap-0.5 text-xs text-white/60 font-medium">
                 RHR {rhr}bpm
                 <MetricInfo slug="resting-heart-rate" />
               </span>
@@ -109,76 +95,69 @@ export function TodayWidget({
           </div>
         )}
 
-        {/* ② Interpretation */}
-        <div>
-          <p className="text-sm font-semibold text-gray-900 leading-snug">{interpretation}</p>
+        {/* Row 3: Main interpretation */}
+        <div className="space-y-1.5">
+          <p className="text-base font-semibold text-white leading-snug">
+            {interpretation}
+          </p>
           {supporting.length > 0 && (
-            <ul className="mt-1.5 space-y-0.5">
+            <ul className="space-y-0.5">
               {supporting.map((item, i) => (
-                <li key={i} className="text-xs text-gray-500">· {item}</li>
+                <li key={i} className="text-xs text-white/40 leading-relaxed">· {item}</li>
               ))}
             </ul>
           )}
         </div>
 
-        {/* ③ Recommendation */}
-        <p className="text-sm font-medium text-gray-700 border-t border-gray-100 pt-3">
-          {recommendation}
-        </p>
+        {/* Row 4: Recommendation */}
+        <div className="border-t border-white/8 pt-3.5">
+          <p className="text-sm font-medium text-white/75 leading-relaxed">
+            {recommendation}
+          </p>
+        </div>
 
-        {/* Today's logged data (food + coffee) */}
+        {/* Row 5: Today's logged data */}
         {(hasTodayFood || hasCoffee) && (
-          <div className="flex flex-wrap gap-x-3 gap-y-1.5 border-t border-gray-100 pt-2.5 items-center">
-
-            {/* Food / activity */}
+          <div className="border-t border-white/8 pt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
             {hasTodayFood && (
               <>
-                <span className="text-[10px] text-gray-400 font-medium">Food ·</span>
-
+                <span className="text-[10px] font-medium text-white/25">Food ·</span>
                 {consumedKcal != null && (
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-white/45">
                     {consumedKcal.toLocaleString()} kcal
                   </span>
                 )}
-
                 {proteinG != null && (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-500">
+                  <span className="inline-flex items-center gap-0.5 text-xs text-white/45">
                     {Math.round(proteinG)}g protein
                     <MetricInfo slug="protein" />
                   </span>
                 )}
-
                 {activityMinutes > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-500">
+                  <span className="inline-flex items-center gap-0.5 text-xs text-white/45">
                     {activityMinutes}min activity
                     <MetricInfo slug="training-load" />
                   </span>
                 )}
               </>
             )}
-
-            {/* Coffee */}
             {hasCoffee && (
               <>
-                {hasTodayFood && <span className="text-gray-200">·</span>}
-
-                <span className="text-xs text-gray-500">
+                {hasTodayFood && <span className="text-white/15">·</span>}
+                <span className="text-xs text-white/45">
                   ☕ {coffeeCups % 1 === 0 ? coffeeCups : coffeeCups.toFixed(1)} cup{coffeeCups !== 1 ? 's' : ''}
                 </span>
-
                 {coffeeMg != null && coffeeMg > 0 && (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-gray-500">
+                  <span className="inline-flex items-center gap-0.5 text-xs text-white/45">
                     {coffeeMg}mg caffeine
                     <MetricInfo slug="caffeine" />
                   </span>
                 )}
-
                 {lastCoffeeTime && (
-                  <span className="text-xs text-gray-500">last {lastCoffeeTime}</span>
+                  <span className="text-xs text-white/45">last {lastCoffeeTime}</span>
                 )}
               </>
             )}
-
           </div>
         )}
       </div>
