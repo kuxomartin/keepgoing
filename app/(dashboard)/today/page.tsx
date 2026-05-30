@@ -18,6 +18,7 @@ import { computeTrendItems, computeTrendSummary } from '@/lib/insights/trends'
 import { generateCoffeeInsights } from '@/lib/insights/coffee-rules'
 import { generateDailyRecommendation } from '@/lib/insights/recommendation'
 import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
+import { computeProteinTarget, detectDuckMeat, detectEveningFruit, generateFoodObservationInsights } from '@/lib/profile/food-context'
 import { mockHealthMetrics, mockWeightLogs } from '@/lib/mock-data/demo-data'
 import type { HealthMetrics, WeightLog } from '@/types/database'
 import type { DaySummary } from '@/lib/insights/types'
@@ -57,7 +58,7 @@ export default async function TodayPage() {
   const d30ago   = format(subDays(startOfDay(new Date()), 29), 'yyyy-MM-dd')
   const d14ago   = format(subDays(startOfDay(new Date()), 13), 'yyyy-MM-dd')
 
-  // 7 parallel fetches — wider windows for insight engine
+  // 8 parallel fetches — wider windows for insight engine
   const [
     { data: metricsRaw },
     { data: foodRaw },
@@ -65,6 +66,7 @@ export default async function TodayPage() {
     { data: activitiesRaw },
     { data: checkinRaw },
     { data: coffeeRaw },
+    { data: todayFoodDesc },
     personalContext,
   ] = await Promise.all([
     supabase.from('health_metrics')
@@ -93,6 +95,11 @@ export default async function TodayPage() {
       .select('consumed_at, cups, caffeine_mg')
       .eq('date', today)
       .order('consumed_at', { ascending: true }),
+
+    // Today's food descriptions — for keyword matching (duck, evening fruit)
+    supabase.from('food_logs')
+      .select('description, eaten_at')
+      .eq('date', today),
 
     // Personal context (gracefully returns EMPTY_CONTEXT if table is empty)
     loadPersonalContextSummary(supabase),
@@ -146,17 +153,6 @@ export default async function TodayPage() {
     ? parseInt(lastCoffeeLog.consumed_at.slice(11, 13), 10)
     : null
 
-  // ── Run engines ───────────────────────────────────────────────────────────
-  const engine = runInsightEngine(allDays, today)
-  const coffeeInsights = generateCoffeeInsights({
-    totalCaffeineMg: coffeeMg > 0 ? coffeeMg : null,
-    lastCoffeeHour,
-  })
-  // Merge coffee insights at the front (warnings) then engine insights
-  const allInsights = [...coffeeInsights, ...engine.insights].slice(0, 5)
-  const trendItems   = computeTrendItems(historical)
-  const trendSummary = computeTrendSummary(trendItems)
-
   // ── Today-specific values ─────────────────────────────────────────────────
   const realMetrics = metricsByDate[today] as HealthMetrics | null ?? null
   const todayFood   = foodByDate[today] ?? null
@@ -166,6 +162,33 @@ export default async function TodayPage() {
   const proteinToday    = todayFood?.protein  ?? null
   const fatToday        = todayFood?.fat      ?? null
   const activityMinutes = actMins[today]      ?? 0
+
+  // ── Dynamic protein target (#2) ───────────────────────────────────────────
+  const latestWeightKg = latestWeightReal?.weight_kg ?? personalContext.weightCurrentKg ?? null
+  const proteinTarget  = computeProteinTarget(personalContext, latestWeightKg, 140)
+
+  // ── Food observation detection (#4 duck, #5 evening fruit) ───────────────
+  const todayDescriptions = (todayFoodDesc ?? []) as Array<{ description: string; eaten_at: string | null }>
+  const duckFound         = personalContext.hasDuckMeatReaction && detectDuckMeat(todayDescriptions.map(f => f.description))
+  const eveningFruitFound = personalContext.eveningFruitContext  && detectEveningFruit(todayDescriptions)
+
+  // ── Run engines ───────────────────────────────────────────────────────────
+  const engine = runInsightEngine(allDays, today)
+
+  // Coffee insights (#6) — personalized when IgG sensitivity flag exists
+  const coffeeInsights = generateCoffeeInsights({
+    totalCaffeineMg:     coffeeMg > 0 ? coffeeMg : null,
+    lastCoffeeHour,
+    hasCoffeeSensitivity: personalContext.hasCoffeeSensitivity,
+  })
+
+  // Food observation insights (#4, #5) — max 2, self-reported only
+  const foodObsInsights = generateFoodObservationInsights({ duckFound, eveningFruitFound })
+
+  // Merge: food-obs first (highest severity), then coffee warnings, then engine
+  const allInsights = [...foodObsInsights, ...coffeeInsights, ...engine.insights].slice(0, 5)
+  const trendItems   = computeTrendItems(historical)
+  const trendSummary = computeTrendSummary(trendItems)
 
   // Recovery metrics for TodayWidget:
   // If today has no Apple Health data, fall back to the most recent historical day
@@ -222,7 +245,7 @@ export default async function TodayPage() {
     yday,
     weeklyActivityMins,
     daysSinceLastBike,
-    proteinTargetG:     140,
+    proteinTargetG:     proteinTarget.grams,
     personalContext,
   })
 

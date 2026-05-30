@@ -10,16 +10,16 @@ import { movingAverage } from '@/lib/calculations/moving-average'
 import { mockWeightLogs } from '@/lib/mock-data/demo-data'
 import type { WeightLog } from '@/types/database'
 import type { WeightChartPoint } from '@/components/charts/weight-chart'
-import { Scale } from 'lucide-react'
+import { Scale, Target } from 'lucide-react'
+import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
 
 export default async function WeightPage() {
   const supabase = await createClient()
 
-  const { data: rawLogs } = await supabase
-    .from('weight_logs')
-    .select('*')
-    .order('date', { ascending: true })
-    .limit(90)
+  const [{ data: rawLogs }, personalContext] = await Promise.all([
+    supabase.from('weight_logs').select('*').order('date', { ascending: true }).limit(90),
+    loadPersonalContextSummary(supabase),
+  ])
 
   const logs: WeightLog[] =
     rawLogs && rawLogs.length > 0
@@ -40,20 +40,26 @@ export default async function WeightPage() {
 
   // Stats
   const latest = logs[logs.length - 1]
-  const sevenDaysAgo = logs.length >= 8 ? logs[logs.length - 8] : logs[0]
-  const thirtyDaysAgo = logs.length >= 31 ? logs[logs.length - 31] : logs[0]
+  const sevenDaysAgo   = logs.length >= 8  ? logs[logs.length - 8]  : logs[0]
+  const thirtyDaysAgo  = logs.length >= 31 ? logs[logs.length - 31] : logs[0]
 
-  const change7d = latest && sevenDaysAgo
-    ? Math.round((latest.weight_kg - sevenDaysAgo.weight_kg) * 10) / 10
-    : null
-  const change30d = latest && thirtyDaysAgo
-    ? Math.round((latest.weight_kg - thirtyDaysAgo.weight_kg) * 10) / 10
-    : null
+  const change7d  = latest && sevenDaysAgo  ? Math.round((latest.weight_kg - sevenDaysAgo.weight_kg)  * 10) / 10 : null
+  const change30d = latest && thirtyDaysAgo ? Math.round((latest.weight_kg - thirtyDaysAgo.weight_kg) * 10) / 10 : null
 
   function formatChange(v: number | null) {
     if (v === null) return '—'
     return (v > 0 ? '+' : '') + v.toFixed(1) + ' kg'
   }
+
+  // Weight goal context (#1)
+  const goalKg    = personalContext.weightGoalKg
+  const currentKg = latest?.weight_kg ?? null
+  const deltaKg   = goalKg != null && currentKg != null
+    ? Math.round((currentKg - goalKg) * 10) / 10
+    : null
+  const trendTowardGoal = goalKg != null && change30d != null
+    ? (goalKg < (currentKg ?? 999) ? change30d < 0 : change30d > 0)
+    : null
 
   return (
     <div className="space-y-6">
@@ -66,6 +72,32 @@ export default async function WeightPage() {
           </p>
         )}
       </div>
+
+      {/* Goal delta banner (#1) */}
+      {goalKg != null && currentKg != null && (
+        <div className="flex items-center gap-3 bg-white rounded-xl border border-gray-200 px-5 py-3.5 shadow-sm">
+          <Target className="h-4 w-4 text-blue-500 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900">
+              {currentKg.toFixed(1)} kg current · Goal: {goalKg} kg
+              {deltaKg != null && deltaKg > 0 && (
+                <span className="ml-2 text-blue-600 font-semibold">{deltaKg} kg to go</span>
+              )}
+              {deltaKg != null && deltaKg <= 0 && (
+                <span className="ml-2 text-green-600 font-semibold">Goal reached</span>
+              )}
+            </p>
+            {trendTowardGoal != null && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                {trendTowardGoal
+                  ? '30-day trend is moving toward your goal.'
+                  : '30-day trend is moving away from your goal.'}
+              </p>
+            )}
+          </div>
+          <span className="text-[10px] text-gray-400 flex-shrink-0">health profile</span>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">

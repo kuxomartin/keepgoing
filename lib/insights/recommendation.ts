@@ -224,7 +224,7 @@ export function generateDailyRecommendation(input: RecommendationInput): DailyRe
           ? `Stay consistent. Last bike was ${daysSinceLastBike} days ago — a ride fits well.`
           : 'Stay consistent. No need to overcorrect today.',
       confidence: bal7d.length >= 5 ? 'high' : 'medium',
-    }, personalContext, avg7d)
+    }, personalContext, avg7d, historical)
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -277,7 +277,7 @@ export function generateDailyRecommendation(input: RecommendationInput): DailyRe
       reasons,
       action:     'Plan 90–120 min at an easy to moderate effort.',
       confidence: 'medium',
-    }, personalContext, avg7d)
+    }, personalContext, avg7d, historical)
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -290,7 +290,7 @@ export function generateDailyRecommendation(input: RecommendationInput): DailyRe
       reasons:    ['Log a few more days of food and activity to unlock recommendations.'],
       action:     "Use today's calories and protein as the main guide.",
       confidence: 'low',
-    }, personalContext, avg7d)
+    }, personalContext, avg7d, historical)
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -319,16 +319,17 @@ export function generateDailyRecommendation(input: RecommendationInput): DailyRe
       : ['All key metrics are within normal range.'],
     action:     'Continue with your planned training and eating.',
     confidence: 'low',
-  }, personalContext, avg7d)
+  }, personalContext, avg7d, historical)
 }
 
 // ── Personal context enrichment ───────────────────────────────────────────────
 // Applied after rule resolution. Max one context addition to keep the card tight.
 
 function applyContext(
-  rec:     DailyRecommendation,
-  ctx:     PersonalContextSummary | undefined,
-  avg7d:   number | null,
+  rec:        DailyRecommendation,
+  ctx:        PersonalContextSummary | undefined,
+  avg7d:      number | null,
+  historical: DaySummary[],
 ): DailyRecommendation {
   if (!ctx) return rec
 
@@ -343,17 +344,25 @@ function applyContext(
     }
   }
 
-  // Rule C2: reference goal weight when discussing deficit trend or surplus
+  // Rule C2: reference weight goal with a meaningful delta when trend matters
   if (
     (rec.status === 'deficit' || rec.status === 'easy') &&
-    ctx.weightGoalKg != null
+    ctx.weightGoalKg != null &&
+    !rec.reasons.some(r => r.includes('goal') || r.includes('kg to'))
   ) {
-    const goalNote = `Goal weight: ${ctx.weightGoalKg} kg.`
-    if (!rec.reasons.some(r => r.includes('goal'))) {
-      return {
-        ...rec,
-        reasons: [...rec.reasons, goalNote],
-      }
+    const latestW = [...historical].reverse().find(d => d.weight != null)?.weight ?? null
+    const delta   = latestW != null
+      ? Math.round((latestW - ctx.weightGoalKg) * 10) / 10
+      : null
+
+    const goalNote = delta != null && delta > 0
+      ? `${delta} kg to your ${ctx.weightGoalKg} kg goal.`
+      : ctx.weightGoalKg != null
+        ? `Goal weight: ${ctx.weightGoalKg} kg.`
+        : null
+
+    if (goalNote) {
+      return { ...rec, reasons: [...rec.reasons, goalNote] }
     }
   }
 

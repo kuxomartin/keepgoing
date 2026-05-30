@@ -7,6 +7,8 @@ import { CalorieBalanceChart, type DayBalance } from '@/components/charts/calori
 import { computeBalance, fmtKcal } from '@/lib/calculations/calorie-balance'
 import { Flame, Beef, Wheat, Droplets, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
+import { computeProteinTarget } from '@/lib/profile/food-context'
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -26,6 +28,14 @@ export default async function NutritionPage() {
     format(subDays(startOfDay(new Date()), 6 - i), 'yyyy-MM-dd')
   )
   const oldest = dates[0]
+
+  // Personal context + latest weight (for dynamic protein target)
+  const [personalContext, { data: latestWeightRaw }] = await Promise.all([
+    loadPersonalContextSummary(supabase),
+    supabase.from('weight_logs').select('weight_kg').order('date', { ascending: false }).limit(1).single(),
+  ])
+  const latestWeightKg  = (latestWeightRaw?.weight_kg as number | null) ?? personalContext.weightCurrentKg ?? null
+  const proteinTarget   = computeProteinTarget(personalContext, latestWeightKg, 140)
 
   // Fetch health_metrics for past 7 days only — no cross-date fallback
   const { data: metricsRaw } = await supabase
@@ -188,13 +198,37 @@ export default async function NutritionPage() {
       {/* Today macros */}
       {(todayProtein != null || todayCarbs != null || todayFat != null) && (
         <Card>
-          <CardHeader><CardTitle>Today&apos;s Macros</CardTitle></CardHeader>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Today&apos;s Macros</CardTitle>
+              <div className="text-right">
+                <span className="text-xs font-medium text-blue-700">
+                  Protein target: {proteinTarget.grams} g
+                </span>
+                {proteinTarget.source === 'profile' && (
+                  <p className="text-[10px] text-gray-400">
+                    from your health profile · {proteinTarget.gPerKg} g/kg
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div className="space-y-1">
                 <div className="flex justify-center"><Beef className="h-4 w-4 text-blue-500" /></div>
                 <p className="text-2xl font-bold text-blue-600">{todayProtein ?? '—'}g</p>
-                <p className="text-xs text-gray-400">Protein</p>
+                <p className="text-xs text-gray-400">
+                  Protein
+                  {todayProtein != null && (
+                    <span className={cn(
+                      'ml-1 font-medium',
+                      todayProtein >= proteinTarget.grams ? 'text-green-600' : 'text-gray-400',
+                    )}>
+                      / {proteinTarget.grams}g
+                    </span>
+                  )}
+                </p>
               </div>
               <div className="space-y-1">
                 <div className="flex justify-center"><Wheat className="h-4 w-4 text-yellow-500" /></div>
