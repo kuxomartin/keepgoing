@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils'
-import { Sparkline, type SparkColor } from './sparkline'
+import type { SparkColor } from '@/lib/spark-utils'
+import { Sparkline } from './sparkline'
 import { MetricInfo } from './metric-info'
 
 interface MetricTileProps {
@@ -34,7 +35,6 @@ export function MetricTile({
       'flex flex-col gap-1 bg-white dark:bg-zinc-900 rounded-2xl p-4 min-w-[96px]',
       className,
     )}>
-      {/* Number + unit */}
       <div className="flex items-end gap-1 leading-none">
         <span className={cn('text-3xl font-bold tracking-tight', valueColor)}>
           {value}
@@ -44,12 +44,10 @@ export function MetricTile({
         </span>
       </div>
 
-      {/* Sparkline */}
       {sparkValues && sparkValues.length >= 2 && (
         <Sparkline values={sparkValues} color={sparkColor} width={64} height={16} />
       )}
 
-      {/* Label + info icon */}
       <div className="flex items-center gap-0.5 mt-0.5">
         <span className="text-[11px] font-medium uppercase tracking-widest text-gray-400 dark:text-zinc-500">
           {label}
