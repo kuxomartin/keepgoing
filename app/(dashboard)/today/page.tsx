@@ -2,9 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { format, subDays, startOfDay, differenceInCalendarDays } from 'date-fns'
-import { Sparkline } from '@/components/ui/sparkline'
 import { MetricInfo } from '@/components/ui/metric-info'
 import { trendColor } from '@/lib/spark-utils'
+import { cn } from '@/lib/utils'
 import { DailyCheckinForm } from '@/components/dashboard/daily-checkin-form'
 import { QuickAddWeight } from '@/components/dashboard/quick-add-weight'
 import { QuickAddFood } from '@/components/dashboard/quick-add-food'
@@ -31,7 +31,17 @@ const HEADLINE: Record<TodayReadiness, string> = {
   rest:     'Focus on recovery today.',
 }
 
-// ── Metric row — label · value · sparkline (no card, no border) ────────────
+// ── Trend label config ────────────────────────────────────────────────────────
+
+const TREND: Record<string, { arrow: string; label: string; cls: string }> = {
+  green: { arrow: '↑', label: 'improving', cls: 'text-emerald-500 dark:text-emerald-400' },
+  amber: { arrow: '↓', label: 'declining', cls: 'text-amber-500  dark:text-amber-400'   },
+  red:   { arrow: '↓', label: 'declining', cls: 'text-rose-500   dark:text-rose-400'    },
+  blue:  { arrow: '→', label: 'stable',    cls: 'text-blue-500   dark:text-blue-400'    },
+  gray:  { arrow: '',  label: '',          cls: ''                                       },
+}
+
+// ── Metric row — label · value · trend label (no sparkline, no card) ─────────
 
 function MetricRow({
   label, value, unit, slug, sparkValues, higherIsBetter,
@@ -43,7 +53,9 @@ function MetricRow({
   sparkValues: number[]
   higherIsBetter: boolean
 }) {
-  const color = sparkValues.length >= 4 ? trendColor(sparkValues, higherIsBetter) : 'gray'
+  const colorKey = sparkValues.length >= 4 ? trendColor(sparkValues, higherIsBetter) : 'gray'
+  const trend    = TREND[colorKey]
+
   return (
     <div className="grid grid-cols-[4.5rem_5.5rem_1fr] items-center py-2.5">
       <span className="text-xs font-medium text-gray-400 dark:text-zinc-500">{label}</span>
@@ -52,8 +64,10 @@ function MetricRow({
         <span className="text-xs font-normal text-gray-400 dark:text-zinc-500 ml-0.5">{unit}</span>
       </span>
       <div className="flex items-center justify-end gap-1.5">
-        {sparkValues.length >= 2 && (
-          <Sparkline values={sparkValues} color={color} width={56} height={14} />
+        {trend.label && (
+          <span className={cn('text-xs font-medium', trend.cls)}>
+            {trend.arrow} {trend.label}
+          </span>
         )}
         <MetricInfo slug={slug} />
       </div>

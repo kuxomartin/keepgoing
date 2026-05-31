@@ -146,7 +146,7 @@ export function MealFormFields({
           rows={4}
           className={cn(
             'w-full rounded-xl border bg-white px-4 py-3 text-base leading-relaxed',
-            'focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none placeholder:text-gray-300',
+            'focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y min-h-[180px] overflow-auto placeholder:text-gray-300',
             formError && !description.trim() ? 'border-red-400' : 'border-gray-200'
           )}
         />
@@ -289,7 +289,7 @@ export function MealFormFields({
               onChange={e => setDigestionNote(e.target.value)}
               placeholder="Felt heavy, bloating, felt great..."
               rows={2}
-              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none placeholder:text-gray-300"
+              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y min-h-[80px] overflow-auto placeholder:text-gray-300"
             />
           </div>
         )}

@@ -6,6 +6,7 @@ export const COFFEE_TYPES = [
   'espresso_office',
   'espresso_home_single',
   'espresso_home_double',
+  'capsule',
   'custom_filter',
   'decaf',
 ] as const
@@ -16,10 +17,11 @@ export type CoffeeType = (typeof COFFEE_TYPES)[number]
 export const COFFEE_TYPE_ORDER: CoffeeType[] = [
   'filter_225',
   'filter_300',
+  'custom_filter',
   'espresso_office',
   'espresso_home_single',
   'espresso_home_double',
-  'custom_filter',
+  'capsule',
   'decaf',
 ]
 
@@ -36,6 +38,7 @@ export const COFFEE_SPECS: Record<CoffeeType, CoffeeSpec> = {
   'espresso_office':      { label: 'Espresso Office', sublabel: '~75 mg caffeine',   defaultCaffeineMg: 75,   isCustom: false },
   'espresso_home_single': { label: 'Home Single',     sublabel: '~75 mg caffeine',   defaultCaffeineMg: 75,   isCustom: false },
   'espresso_home_double': { label: 'Home Double',     sublabel: '~150 mg caffeine',  defaultCaffeineMg: 150,  isCustom: false },
+  'capsule':              { label: 'Capsule Coffee',  sublabel: '~60 mg caffeine',   defaultCaffeineMg: 60,   isCustom: false },
   'custom_filter':        { label: 'Custom Filter',   sublabel: 'enter volume below', defaultCaffeineMg: null, isCustom: true  },
   'decaf':                { label: 'Decaf',           sublabel: '~5 mg caffeine',    defaultCaffeineMg: 5,    isCustom: false },
 }
@@ -47,6 +50,7 @@ export const CAFFEINE_PER_CUP: Record<CoffeeType, number | null> = {
   'espresso_office':      75,
   'espresso_home_single': 75,
   'espresso_home_double': 150,
+  'capsule':              60,
   'custom_filter':        null,
   'decaf':                5,
 }
