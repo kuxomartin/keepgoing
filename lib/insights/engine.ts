@@ -128,31 +128,32 @@ function generateTodayStatus(
   }
 
   // ── Split interpretation + recommendation ─────────────────────────────
-  const prefix = usingFallback ? "Yesterday's data: " : ''
+  // Interpretations are clean sentences — no prefix baked in.
+  // The page handles the fallback context label separately.
 
   const interpretations: Record<TodayReadiness, string> = {
     go:
       hrvRatio != null && hrvRatio >= 1.08
-        ? `${prefix}HRV is ${Math.round((hrvRatio - 1) * 100)}% above your 14-day baseline.`
+        ? `HRV is ${Math.round((hrvRatio - 1) * 100)}% above your 14-day baseline.`
         : sleepH != null && sleepH >= 7.5
-          ? `${prefix}You slept ${sleepH.toFixed(1)}h and recovery looks strong.`
-          : `${prefix}Recovery looks good.`,
+          ? `You slept ${sleepH.toFixed(1)}h and recovery looks strong.`
+          : `Recovery looks good.`,
 
     moderate:
       load7d > 350
-        ? `${prefix}Training load has been high this week (${Math.round(load7d)} min).`
+        ? `Training load has been high this week (${Math.round(load7d)} min).`
         : sleepH != null && sleepH < 6.5
-          ? `${prefix}Sleep was short at ${sleepH.toFixed(1)}h.`
-          : `${prefix}Recovery is at a moderate level.`,
+          ? `Sleep was short at ${sleepH.toFixed(1)}h.`
+          : `Recovery is at a moderate level.`,
 
     rest:
       refDay.restingHr != null &&
       baselines.restingHr14d != null &&
       refDay.restingHr > baselines.restingHr14d + 6
-        ? `${prefix}Resting HR is ${Math.round(refDay.restingHr - baselines.restingHr14d)}bpm above baseline.`
+        ? `Resting HR is ${Math.round(refDay.restingHr - baselines.restingHr14d)}bpm above baseline.`
         : hrvRatio != null && hrvRatio < 0.82
-          ? `${prefix}HRV is ${Math.round((1 - hrvRatio) * 100)}% below your baseline.`
-          : `${prefix}Multiple recovery markers are suppressed.`,
+          ? `HRV is ${Math.round((1 - hrvRatio) * 100)}% below your baseline.`
+          : `Multiple recovery markers are suppressed.`,
   }
 
   const recommendations: Record<TodayReadiness, string> = {

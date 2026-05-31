@@ -287,17 +287,21 @@ export default async function TodayPage() {
       {/* 2. Interpretation — the why */}
       <p className="text-base text-gray-500 dark:text-zinc-400 leading-relaxed mb-4">
         {engine.todayInterpretation}
-        {engine.usingFallback && (
-          <span className="text-gray-400 dark:text-zinc-600"> Based on yesterday&apos;s data.</span>
-        )}
       </p>
 
-      {/* 3. Recommendation — the what, visually separated */}
-      <div className="flex items-start gap-2 mb-8">
-        <span className="text-gray-300 dark:text-zinc-600 mt-0.5 select-none" aria-hidden="true">→</span>
-        <p className="text-base font-semibold text-gray-800 dark:text-zinc-200 leading-relaxed">
-          {engine.todayRecommendation}
-        </p>
+      {/* 3. Recommendation + optional fallback note */}
+      <div className="mb-8 space-y-2">
+        <div className="flex items-start gap-2">
+          <span className="text-gray-300 dark:text-zinc-600 mt-0.5 select-none" aria-hidden="true">→</span>
+          <p className="text-base font-semibold text-gray-800 dark:text-zinc-200 leading-relaxed">
+            {engine.todayRecommendation}
+          </p>
+        </div>
+        {engine.usingFallback && (
+          <p className="text-xs text-gray-400 dark:text-zinc-600 pl-5">
+            Using yesterday&apos;s recovery data
+          </p>
+        )}
       </div>
 
       {/* ── METRICS ──────────────────────────────────────────────────────── */}
