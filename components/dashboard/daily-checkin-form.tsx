@@ -30,6 +30,32 @@ const DIGESTION = [
   { emoji: '🤢', value: 1,  label: 'Poor'  },
 ] as const
 
+type Scale = typeof FEELING | typeof BODY | typeof DIGESTION
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Find closest item in scale to a stored DB value. */
+function closestIndex(scale: Scale, dbValue: number | null): number {
+  if (dbValue == null) return Math.floor(scale.length / 2)
+  let best = 0
+  let bestDist = Infinity
+  scale.forEach((item, i) => {
+    const dist = Math.abs(item.value - dbValue)
+    if (dist < bestDist) { bestDist = dist; best = i }
+  })
+  return best
+}
+
+function labelFor(scale: Scale, dbValue: number | null): string {
+  if (dbValue == null) return '—'
+  return scale[closestIndex(scale, dbValue)].label
+}
+
+function emojiFor(scale: Scale, dbValue: number | null): string {
+  if (dbValue == null) return '—'
+  return scale[closestIndex(scale, dbValue)].emoji
+}
+
 // ── Emoji row ─────────────────────────────────────────────────────────────────
 
 function EmojiRow({
@@ -79,30 +105,112 @@ function EmojiRow({
   )
 }
 
+// ── Summary (read-only completed state) ───────────────────────────────────────
+
+function CheckinSummary({
+  energy,
+  soreness,
+  digestion,
+  onEdit,
+}: {
+  energy:    number | null
+  soreness:  number | null
+  digestion: number | null
+  onEdit: () => void
+}) {
+  return (
+    <div className="border-t border-gray-100 dark:border-zinc-800 pt-5">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">
+          Morning Check-in
+        </p>
+        <span className="text-[10px] font-semibold text-emerald-500 dark:text-emerald-400 uppercase tracking-widest">
+          Logged today ✓
+        </span>
+      </div>
+
+      <div className="space-y-1.5 mb-4">
+        <SummaryRow label="Feeling"   emoji={emojiFor(FEELING,   energy)}    value={labelFor(FEELING,   energy)}    />
+        <SummaryRow label="Body"      emoji={emojiFor(BODY,      soreness)}  value={labelFor(BODY,      soreness)}  />
+        <SummaryRow label="Digestion" emoji={emojiFor(DIGESTION, digestion)} value={labelFor(DIGESTION, digestion)} />
+      </div>
+
+      <button
+        type="button"
+        onClick={onEdit}
+        className="text-sm text-gray-400 dark:text-zinc-600 hover:text-gray-600 dark:hover:text-zinc-400 transition-colors"
+      >
+        Edit check-in
+      </button>
+    </div>
+  )
+}
+
+function SummaryRow({ label, emoji, value }: { label: string; emoji: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <span className="w-20 text-xs text-gray-400 dark:text-zinc-500">{label}</span>
+      <span>{emoji}</span>
+      <span className="text-gray-700 dark:text-zinc-300">{value}</span>
+    </div>
+  )
+}
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+
+interface ExistingCheckin {
+  energy:    number | null
+  soreness:  number | null
+  digestion: number | null
+  notes:     string | null
+}
+
 // ── Form ──────────────────────────────────────────────────────────────────────
 
-export function DailyCheckinForm({ onSuccess }: { onSuccess?: () => void }) {
-  const [feelingIdx,   setFeelingIdx]   = useState(2)   // 😐 default
-  const [bodyIdx,      setBodyIdx]      = useState(1)   // 🙂 default
-  const [digestionIdx, setDigestionIdx] = useState(1)   // 🙂 default
-  const [notes,   setNotes]   = useState('')
-  const [loading, setLoading] = useState(false)
-  const [done,    setDone]    = useState(false)
-  const [skipped, setSkipped] = useState(false)
+export function DailyCheckinForm({
+  existingCheckin,
+  onSuccess,
+}: {
+  existingCheckin?: ExistingCheckin | null
+  onSuccess?: () => void
+}) {
+  // Determine initial indices from existing check-in or defaults
+  const initFeelingIdx   = existingCheckin ? closestIndex(FEELING,   existingCheckin.energy)    : 2
+  const initBodyIdx      = existingCheckin ? closestIndex(BODY,      existingCheckin.soreness)  : 1
+  const initDigestionIdx = existingCheckin ? closestIndex(DIGESTION, existingCheckin.digestion) : 1
+  const initNotes        = existingCheckin?.notes ?? ''
+
+  // View state: 'summary' | 'form' | 'skipped'
+  // If check-in already exists → start in summary
+  const [view,         setView]         = useState<'summary' | 'form' | 'skipped'>(
+    existingCheckin ? 'summary' : 'form'
+  )
+  const [feelingIdx,   setFeelingIdx]   = useState(initFeelingIdx)
+  const [bodyIdx,      setBodyIdx]      = useState(initBodyIdx)
+  const [digestionIdx, setDigestionIdx] = useState(initDigestionIdx)
+  const [notes,        setNotes]        = useState(initNotes)
+  const [loading,      setLoading]      = useState(false)
+  // Snapshot of last-saved values to show in summary
+  const [savedEnergy,    setSavedEnergy]    = useState<number | null>(existingCheckin?.energy    ?? null)
+  const [savedSoreness,  setSavedSoreness]  = useState<number | null>(existingCheckin?.soreness  ?? null)
+  const [savedDigestion, setSavedDigestion] = useState<number | null>(existingCheckin?.digestion ?? null)
 
   // Dismissed for this session
-  if (skipped) return null
+  if (view === 'skipped') return null
 
-  // Saved state
-  if (done) {
+  // Show read-only summary
+  if (view === 'summary') {
     return (
-      <div className="border-t border-gray-100 dark:border-zinc-800 pt-5">
-        <p className="text-xs text-gray-400 dark:text-zinc-600">
-          Morning check-in saved ✓
-        </p>
-      </div>
+      <CheckinSummary
+        energy={savedEnergy}
+        soreness={savedSoreness}
+        digestion={savedDigestion}
+        onEdit={() => setView('form')}
+      />
     )
   }
+
+  // ── Form view ───────────────────────────────────────────────────────────────
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -113,13 +221,17 @@ export function DailyCheckinForm({ onSuccess }: { onSuccess?: () => void }) {
     if (!user) { setLoading(false); return }
 
     const today = new Date().toISOString().slice(0, 10)
+    const energyVal    = FEELING[feelingIdx].value
+    const sorenessVal  = BODY[bodyIdx].value
+    const digestionVal = DIGESTION[digestionIdx].value
+
     const { error } = await supabase.from('daily_checkins').upsert(
       {
         user_id:    user.id,
         date:       today,
-        energy:     FEELING[feelingIdx].value,
-        soreness:   BODY[bodyIdx].value,
-        digestion:  DIGESTION[digestionIdx].value,
+        energy:     energyVal,
+        soreness:   sorenessVal,
+        digestion:  digestionVal,
         mood:       null,
         stress:     null,
         motivation: null,
@@ -130,7 +242,11 @@ export function DailyCheckinForm({ onSuccess }: { onSuccess?: () => void }) {
 
     setLoading(false)
     if (!error) {
-      setDone(true)
+      // Persist saved values so summary can display them without a page reload
+      setSavedEnergy(energyVal)
+      setSavedSoreness(sorenessVal)
+      setSavedDigestion(digestionVal)
+      setView('summary')
       onSuccess?.()
     }
   }
@@ -179,13 +295,26 @@ export function DailyCheckinForm({ onSuccess }: { onSuccess?: () => void }) {
           >
             {loading ? 'Saving…' : 'Save'}
           </button>
-          <button
-            type="button"
-            onClick={() => setSkipped(true)}
-            className="text-sm text-gray-400 dark:text-zinc-600 hover:text-gray-600 dark:hover:text-zinc-400 transition-colors"
-          >
-            Skip today
-          </button>
+          {/* Only show Skip if there's no existing check-in being edited */}
+          {!existingCheckin && (
+            <button
+              type="button"
+              onClick={() => setView('skipped')}
+              className="text-sm text-gray-400 dark:text-zinc-600 hover:text-gray-600 dark:hover:text-zinc-400 transition-colors"
+            >
+              Skip today
+            </button>
+          )}
+          {/* When editing existing, show cancel instead */}
+          {existingCheckin && (
+            <button
+              type="button"
+              onClick={() => setView('summary')}
+              className="text-sm text-gray-400 dark:text-zinc-600 hover:text-gray-600 dark:hover:text-zinc-400 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </form>
     </div>

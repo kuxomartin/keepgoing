@@ -137,7 +137,7 @@ export default async function TodayPage() {
       .lte('start_time', today  + 'T23:59:59'),
 
     supabase.from('daily_checkins')
-      .select('energy, stress, soreness')
+      .select('energy, soreness, digestion, notes')
       .eq('date', today).limit(1),
 
     supabase.from('coffee_logs')
@@ -412,7 +412,7 @@ export default async function TodayPage() {
       {/* ── QUICK ACTIONS ────────────────────────────────────────────────── */}
       <div className="border-t border-gray-100 dark:border-zinc-800 pt-5 space-y-4">
         <QuickActionsPanel />
-        <DailyCheckinForm />
+        <DailyCheckinForm existingCheckin={checkinRaw?.[0] ?? null} />
         <div className="hidden lg:grid grid-cols-3 gap-4">
           <QuickAddWeight />
           <QuickAddFood />
