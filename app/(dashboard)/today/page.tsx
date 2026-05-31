@@ -11,7 +11,7 @@ import { QuickAddFood } from '@/components/dashboard/quick-add-food'
 import { QuickActionsPanel } from '@/components/dashboard/quick-actions-panel'
 import { YesterdayWidget } from '@/components/dashboard/yesterday-widget'
 import { TrendWidget } from '@/components/dashboard/trend-widget'
-import { QuickAddCoffeeLink } from '@/components/dashboard/quick-add-coffee-link'
+import { QuickAddCoffee } from '@/components/dashboard/quick-add-coffee'
 import { runInsightEngine } from '@/lib/insights/engine'
 import { computeBaselines } from '@/lib/insights/baselines'
 import { computeTrendItems, computeTrendSummary } from '@/lib/insights/trends'
@@ -406,7 +406,7 @@ export default async function TodayPage() {
         <DailyCheckinForm existingCheckin={checkinRaw?.[0] ?? null} />
         <div className="hidden lg:grid grid-cols-3 gap-4">
           <QuickAddFood />
-          <QuickAddCoffeeLink />
+          <QuickAddCoffee />
           <QuickAddWeight />
         </div>
       </div>
