@@ -9,10 +9,18 @@
 
 /* ── Design token overrides ────────────────────────────────────────────────── */
 :root {
+  /* Status — data only, not decoration */
   --status-green:  #10b981;
   --status-amber:  #f59e0b;
   --status-red:    #f43f5e;
   --status-blue:   #3b82f6;
+
+  /* Accent — Nothing-inspired, used sparingly */
+  --color-accent:  #E5173F;
+
+  /* Base palette */
+  --color-near-black: #111111;
+  --color-mid-gray:   #666666;
 }
 
 /* ── Safe area utilities (iOS) ─────────────────────────────────────────────── */
@@ -24,7 +32,7 @@ input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 20px; height: 20px;
   border-radius: 50%;
-  background: #2563eb;
+  background: #111111;
   cursor: pointer;
   border: 2px solid white;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
@@ -32,7 +40,7 @@ input[type='range']::-webkit-slider-thumb {
 input[type='range']::-moz-range-thumb {
   width: 20px; height: 20px;
   border-radius: 50%;
-  background: #2563eb;
+  background: #111111;
   cursor: pointer;
   border: 2px solid white;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);

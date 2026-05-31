@@ -3,34 +3,27 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { format } from 'date-fns'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ActivityDurationChart } from '@/components/charts/activity-duration-chart'
 import { weeklyActivityTotals } from '@/lib/calculations/weekly-totals'
 import { mockActivities } from '@/lib/mock-data/demo-data'
 import type { Activity } from '@/types/database'
-import { ChevronRight, Bike, PersonStanding, Swords, CircleDot, Mountain, Dumbbell, Footprints } from 'lucide-react'
+import { Bike, PersonStanding, Swords, CircleDot, Mountain, Dumbbell, Footprints } from 'lucide-react'
 import { MetricInfo } from '@/components/ui/metric-info'
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
-  ride: <Bike className="h-4 w-4" />,
-  run: <PersonStanding className="h-4 w-4" />,
+  ride:      <Bike className="h-4 w-4" />,
+  run:       <PersonStanding className="h-4 w-4" />,
   badminton: <Swords className="h-4 w-4" />,
-  golf: <CircleDot className="h-4 w-4" />,
-  hike: <Mountain className="h-4 w-4" />,
-  gym: <Dumbbell className="h-4 w-4" />,
-  walk: <Footprints className="h-4 w-4" />,
+  golf:      <CircleDot className="h-4 w-4" />,
+  hike:      <Mountain className="h-4 w-4" />,
+  gym:       <Dumbbell className="h-4 w-4" />,
+  walk:      <Footprints className="h-4 w-4" />,
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  ride: 'Ride',
-  run: 'Run',
-  badminton: 'Badminton',
-  golf: 'Golf',
-  hike: 'Hike',
-  gym: 'Gym',
-  walk: 'Walk',
-  other: 'Other',
+  ride: 'Ride', run: 'Run', badminton: 'Badminton', golf: 'Golf',
+  hike: 'Hike', gym: 'Gym', walk: 'Walk', other: 'Other',
 }
 
 const EFFORT_COLORS: Record<number, 'green' | 'yellow' | 'red' | 'default'> = {
@@ -67,55 +60,52 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
 
   const isUsingMock = !rawActivities || rawActivities.length === 0
 
-  // Filter by type
   const filtered = typeFilter
     ? allActivities.filter((a) => a.activity_type === typeFilter)
     : allActivities
 
-  // Get unique activity types for filter buttons
   const allTypes = [...new Set(allActivities.map((a) => a.activity_type))].sort()
-
-  // Weekly totals for chart
   const weeklyTotals = weeklyActivityTotals(allActivities)
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Activities</h1>
-          <p className="mt-1 text-sm text-gray-500">Your training sessions and movement history.</p>
+          <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-1">Activities</p>
           {isUsingMock && (
-            <p className="mt-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 inline-block">
+            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-3 py-1.5 inline-block">
               Showing demo data
             </p>
           )}
         </div>
         <Link
           href="/activities/add"
-          className="flex-shrink-0 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:border-gray-300 hover:text-gray-900 transition-colors whitespace-nowrap"
+          className="flex-shrink-0 px-4 py-2 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm font-medium text-gray-600 dark:text-zinc-400 hover:border-gray-300 dark:hover:border-zinc-600 hover:text-gray-900 dark:hover:text-zinc-100 transition-colors whitespace-nowrap"
         >
           + Add Manually
         </Link>
       </div>
 
-      {/* Weekly chart */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-1.5">
-            <CardTitle>Training volume by week</CardTitle>
-            <MetricInfo slug="training-load" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ActivityDurationChart data={weeklyTotals} />
-        </CardContent>
-      </Card>
+      {/* ── Training volume chart — no card border ─────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-1.5 mb-3">
+          <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Training volume</span>
+          <span className="text-xs text-gray-400 dark:text-zinc-500">per week</span>
+          <MetricInfo slug="training-load" />
+        </div>
+        <ActivityDurationChart data={weeklyTotals} />
+      </div>
 
-      {/* Filter buttons */}
+      {/* ── Type filter pills ───────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">
         <Link
           href="/activities"
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${!typeFilter ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            !typeFilter
+              ? 'bg-gray-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+              : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700'
+          }`}
         >
           All ({allActivities.length})
         </Link>
@@ -125,7 +115,11 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
             <Link
               key={type}
               href={`/activities?type=${type}`}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize ${typeFilter === type ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors capitalize ${
+                typeFilter === type
+                  ? 'bg-gray-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                  : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-700'
+              }`}
             >
               {TYPE_LABELS[type] ?? type} ({count})
             </Link>
@@ -133,49 +127,51 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
         })}
       </div>
 
-      {/* Activity list */}
-      <Card>
-        <CardContent className="p-0">
-          {filtered.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-gray-400">
-              No activities found{typeFilter ? ` for type "${typeFilter}"` : ''}.
-            </div>
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {filtered.map((activity) => (
-                <li key={activity.id}>
-                  <Link
-                    href={`/activities/${activity.id}`}
-                    className="flex items-center gap-4 px-5 py-4 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex-shrink-0 w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
-                      {TYPE_ICONS[activity.activity_type] ?? <Mountain className="h-4 w-4" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{activity.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {format(new Date(activity.start_time), 'EEE d MMM, HH:mm')}
-                        {' · '}
-                        {formatDuration(activity.duration_minutes)}
-                        {activity.distance_km ? ` · ${activity.distance_km.toFixed(1)} km` : ''}
-                        {activity.avg_hr ? ` · ♥ ${activity.avg_hr} bpm` : ''}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {activity.perceived_effort && (
-                        <Badge variant={EFFORT_COLORS[activity.perceived_effort] ?? 'default'}>
-                          {activity.perceived_effort}/10
-                        </Badge>
-                      )}
-                      <ChevronRight className="h-4 w-4 text-gray-300" />
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      {/* ── Activity feed — no card wrapper ────────────────────────────────── */}
+      <div className="border-t border-gray-100 dark:border-zinc-800">
+        {filtered.length === 0 ? (
+          <p className="py-8 text-center text-sm text-gray-400 dark:text-zinc-500">
+            No activities found{typeFilter ? ` for type "${typeFilter}"` : ''}.
+          </p>
+        ) : (
+          <ul className="divide-y divide-gray-100 dark:divide-zinc-800">
+            {filtered.map((activity) => (
+              <li key={activity.id}>
+                <Link
+                  href={`/activities/${activity.id}`}
+                  className="flex items-center gap-4 py-4 hover:bg-gray-50 dark:hover:bg-zinc-900/50 transition-colors group"
+                >
+                  {/* Type icon — neutral, not blue */}
+                  <div className="flex-shrink-0 w-8 h-8 bg-gray-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center text-gray-400 dark:text-zinc-500">
+                    {TYPE_ICONS[activity.activity_type] ?? <Mountain className="h-4 w-4" />}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-zinc-100 truncate">{activity.title}</p>
+                    <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5">
+                      {format(new Date(activity.start_time), 'EEE d MMM, HH:mm')}
+                      {' · '}
+                      {formatDuration(activity.duration_minutes)}
+                      {activity.distance_km ? ` · ${activity.distance_km.toFixed(1)} km` : ''}
+                      {activity.avg_hr ? ` · ♥ ${activity.avg_hr} bpm` : ''}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {activity.perceived_effort && (
+                      <Badge variant={EFFORT_COLORS[activity.perceived_effort] ?? 'default'}>
+                        {activity.perceived_effort}/10
+                      </Badge>
+                    )}
+                    {/* Subtle chevron — visible only on hover */}
+                    <span className="text-gray-200 dark:text-zinc-700 group-hover:text-gray-400 dark:group-hover:text-zinc-500 transition-colors text-sm">›</span>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }

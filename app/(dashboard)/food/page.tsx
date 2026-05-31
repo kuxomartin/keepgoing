@@ -61,10 +61,10 @@ export default async function FoodPage({ searchParams }: PageProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Food Log</p>
+        <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Intake</p>
         <Link
           href="/food/add"
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors flex-shrink-0"
+          className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold rounded-xl hover:bg-gray-700 dark:hover:bg-zinc-200 transition-colors flex-shrink-0"
         >
           <Plus className="h-3.5 w-3.5" />
           Add Meal

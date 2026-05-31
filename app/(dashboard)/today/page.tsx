@@ -21,20 +21,21 @@ import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
 import { computeProteinTarget, detectDuckMeat, detectEveningFruit, generateFoodObservationInsights } from '@/lib/profile/food-context'
 import type { HealthMetrics } from '@/types/database'
 import type { DaySummary } from '@/lib/insights/types'
+
 // ── Trend label config ────────────────────────────────────────────────────────
 
 const TREND: Record<string, { arrow: string; label: string; cls: string }> = {
   green: { arrow: '↑', label: 'improving', cls: 'text-emerald-500 dark:text-emerald-400' },
   amber: { arrow: '↓', label: 'declining', cls: 'text-amber-500  dark:text-amber-400'   },
   red:   { arrow: '↓', label: 'declining', cls: 'text-rose-500   dark:text-rose-400'    },
-  blue:  { arrow: '→', label: 'stable',    cls: 'text-blue-500   dark:text-blue-400'    },
+  blue:  { arrow: '→', label: 'stable',    cls: 'text-gray-400   dark:text-zinc-500'    },
   gray:  { arrow: '',  label: '',          cls: ''                                       },
 }
 
-// ── Metric row — label · value · trend label (no sparkline, no card) ─────────
+// ── Metric tile — large number, label below, trend ────────────────────────────
 
-function MetricRow({
-  label, value, unit, slug, sparkValues, higherIsBetter,
+function MetricTile({
+  label, value, unit, slug, sparkValues, higherIsBetter, showTrend = true,
 }: {
   label: string
   value: string
@@ -42,25 +43,28 @@ function MetricRow({
   slug: string
   sparkValues: number[]
   higherIsBetter: boolean
+  showTrend?: boolean
 }) {
-  const colorKey = sparkValues.length >= 4 ? trendColor(sparkValues, higherIsBetter) : 'gray'
+  const colorKey = showTrend && sparkValues.length >= 4 ? trendColor(sparkValues, higherIsBetter) : 'gray'
   const trend    = TREND[colorKey]
 
   return (
-    <div className="grid grid-cols-[4.5rem_5.5rem_1fr] items-center py-2.5">
-      <span className="text-xs font-medium text-gray-400 dark:text-zinc-500">{label}</span>
-      <span className="text-sm font-bold text-gray-900 dark:text-zinc-50 tabular-nums">
-        {value}
-        <span className="text-xs font-normal text-gray-400 dark:text-zinc-500 ml-0.5">{unit}</span>
-      </span>
-      <div className="flex items-center justify-end gap-1.5">
-        {trend.label && (
-          <span className={cn('text-xs font-medium', trend.cls)}>
-            {trend.arrow} {trend.label}
-          </span>
-        )}
+    <div>
+      <div className="flex items-baseline gap-1 leading-none">
+        <span className="text-[2rem] font-black text-gray-900 dark:text-zinc-50 tabular-nums leading-none">
+          {value}
+        </span>
+        <span className="text-sm text-gray-400 dark:text-zinc-500">{unit}</span>
+      </div>
+      <div className="flex items-center gap-0.5 mt-2">
+        <span className="text-xs text-gray-400 dark:text-zinc-500">{label}</span>
         <MetricInfo slug={slug} />
       </div>
+      {trend.label && (
+        <span className={cn('text-xs font-medium mt-0.5 block', trend.cls)}>
+          {trend.arrow} {trend.label}
+        </span>
+      )}
     </div>
   )
 }
@@ -172,7 +176,7 @@ export default async function TodayPage() {
   const dateRange = Array.from({ length: 30 }, (_, i) =>
     format(subDays(startOfDay(new Date()), 29 - i), 'yyyy-MM-dd')
   )
-  const allDays   = buildDaySummaries(dateRange, metricsByDate, foodByDate, weightByDate, actMins)
+  const allDays    = buildDaySummaries(dateRange, metricsByDate, foodByDate, weightByDate, actMins)
   const historical = allDays.filter(d => d.date < today)
   const yday       = historical.slice(-1)[0] ?? null
 
@@ -228,14 +232,13 @@ export default async function TodayPage() {
       ? fallbackRecovery.sleepMinutes / 60
       : null
 
-  const widgetHrv = realMetrics?.hrv_ms     ?? fallbackRecovery?.hrv      ?? null
-  const widgetRhr = realMetrics?.resting_hr ?? fallbackRecovery?.restingHr ?? null
+  const widgetHrv    = realMetrics?.hrv_ms     ?? fallbackRecovery?.hrv      ?? null
+  const widgetWeight = latestWeightReal?.weight_kg ?? null
 
-  // ── 7-day sparklines for metric rows ─────────────────────────────────────
+  // ── 7-day sparklines for metric tiles ────────────────────────────────────
   const last7      = historical.slice(-7)
   const sleepSpark = last7.map(d => d.sleepMinutes).filter((v): v is number => v != null).map(m => m / 60)
   const hrvSpark   = last7.map(d => d.hrv).filter((v): v is number => v != null)
-  const rhrSpark   = last7.map(d => d.restingHr).filter((v): v is number => v != null)
 
   // ── Calorie baseline for yesterday context ────────────────────────────────
   const calBase7d = (() => {
@@ -273,6 +276,9 @@ export default async function TodayPage() {
   // ── Derived flags ─────────────────────────────────────────────────────────
   const hasLogged = consumed != null || proteinToday != null || activityMinutes > 0 || coffeeCups > 0
 
+  // Count visible metric tiles for grid columns
+  const metricCount = [widgetHrv != null, widgetSleepH != null, widgetWeight != null].filter(Boolean).length
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div>
@@ -294,54 +300,61 @@ export default async function TodayPage() {
         {engine.todayInterpretation}
       </p>
 
-      {/* 3. Recommendation + optional fallback note */}
-      <div className="mb-8 space-y-2">
-        <div className="flex items-start gap-2">
-          <span className="text-gray-300 dark:text-zinc-600 mt-0.5 select-none" aria-hidden="true">→</span>
-          <p className="text-base font-semibold text-gray-800 dark:text-zinc-200 leading-relaxed">
-            {engine.todayRecommendation}
-          </p>
-        </div>
+      {/* 3. Recommendation — no decorative arrow */}
+      <div className="mb-6 space-y-2">
+        <p className="text-base font-semibold text-gray-800 dark:text-zinc-200 leading-relaxed">
+          {engine.todayRecommendation}
+        </p>
         {engine.usingFallback && (
-          <p className="text-xs text-gray-400 dark:text-zinc-600 pl-5">
+          <p className="text-xs text-gray-400 dark:text-zinc-600">
             Using yesterday&apos;s recovery data
           </p>
         )}
       </div>
 
-      {/* ── METRICS ──────────────────────────────────────────────────────── */}
-      {(widgetSleepH != null || widgetHrv != null || widgetRhr != null) && (
-        <div className="border-t border-gray-100 dark:border-zinc-800 pt-1 mb-6 divide-y divide-gray-50 dark:divide-zinc-900/80">
-          {widgetSleepH != null && (
-            <MetricRow
-              label="Sleep"
-              value={widgetSleepH.toFixed(1)}
-              unit="h"
-              slug="sleep"
-              sparkValues={sleepSpark}
-              higherIsBetter={true}
-            />
-          )}
-          {widgetHrv != null && (
-            <MetricRow
-              label="HRV"
-              value={String(Math.round(Number(widgetHrv)))}
-              unit="ms"
-              slug="hrv"
-              sparkValues={hrvSpark}
-              higherIsBetter={true}
-            />
-          )}
-          {widgetRhr != null && (
-            <MetricRow
-              label="RHR"
-              value={String(widgetRhr)}
-              unit="bpm"
-              slug="resting-heart-rate"
-              sparkValues={rhrSpark}
-              higherIsBetter={false}
-            />
-          )}
+      {/* ── MORNING CHECK-IN — time-sensitive, shown early ───────────────── */}
+      <DailyCheckinForm existingCheckin={checkinData} />
+
+      {/* ── METRICS — HRV · Sleep · Weight as instrument tiles ───────────── */}
+      {metricCount > 0 && (
+        <div className="border-t border-gray-100 dark:border-zinc-800 pt-6 mb-8 mt-6">
+          <div className={cn(
+            'grid gap-6',
+            metricCount === 3 ? 'grid-cols-3' :
+            metricCount === 2 ? 'grid-cols-2' : 'grid-cols-1'
+          )}>
+            {widgetHrv != null && (
+              <MetricTile
+                label="HRV"
+                value={String(Math.round(Number(widgetHrv)))}
+                unit="ms"
+                slug="hrv"
+                sparkValues={hrvSpark}
+                higherIsBetter={true}
+              />
+            )}
+            {widgetSleepH != null && (
+              <MetricTile
+                label="Sleep"
+                value={widgetSleepH.toFixed(1)}
+                unit="h"
+                slug="sleep"
+                sparkValues={sleepSpark}
+                higherIsBetter={true}
+              />
+            )}
+            {widgetWeight != null && (
+              <MetricTile
+                label="Weight"
+                value={widgetWeight.toFixed(1)}
+                unit="kg"
+                slug="weight"
+                sparkValues={[]}
+                higherIsBetter={false}
+                showTrend={false}
+              />
+            )}
+          </div>
         </div>
       )}
 
@@ -403,7 +416,6 @@ export default async function TodayPage() {
       {/* ── QUICK ACTIONS ────────────────────────────────────────────────── */}
       <div className="border-t border-gray-100 dark:border-zinc-800 pt-5 space-y-4">
         <QuickActionsPanel />
-        <DailyCheckinForm existingCheckin={checkinRaw?.[0] ?? null} />
         <div className="hidden lg:grid grid-cols-3 gap-4">
           <QuickAddFood />
           <QuickAddCoffee />

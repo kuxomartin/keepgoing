@@ -5,7 +5,6 @@ import { format } from 'date-fns'
 import { CardContent } from '@/components/ui/card'
 import { MetricInfo } from '@/components/ui/metric-info'
 import { trendColor } from '@/lib/spark-utils'
-import { Sparkline } from '@/components/ui/sparkline'
 import { SleepChart } from '@/components/charts/sleep-chart'
 import { HrvChart } from '@/components/charts/hrv-chart'
 import { RestingHrChart } from '@/components/charts/resting-hr-chart'
@@ -32,11 +31,21 @@ function deduplicateByDate(metrics: HealthMetrics[]): HealthMetrics[] {
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
 }
 
-const STATUS_HERO = {
-  green:  { bar: 'bg-emerald-500', badge: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30', label: 'Well recovered' },
-  yellow: { bar: 'bg-amber-400',   badge: 'bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/30',       label: 'Moderate recovery' },
-  red:    { bar: 'bg-rose-500',    badge: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30',           label: 'Low recovery' },
+// Status config — accent bar + status label
+const STATUS_CONFIG = {
+  green:  { bar: 'bg-emerald-500', label: 'Well recovered',    labelCls: 'text-emerald-400' },
+  yellow: { bar: 'bg-amber-400',   label: 'Moderate recovery', labelCls: 'text-amber-300'   },
+  red:    { bar: 'bg-rose-500',    label: 'Low recovery',      labelCls: 'text-rose-400'    },
 } as const
+
+// Trend labels for vitals (no sparklines)
+const TREND_TEXT: Record<string, { text: string; cls: string }> = {
+  green: { text: '↑ improving', cls: 'text-emerald-400' },
+  amber: { text: '↓ declining', cls: 'text-amber-400'   },
+  red:   { text: '↓ declining', cls: 'text-rose-400'    },
+  blue:  { text: '→ stable',    cls: 'text-white/40'    },
+  gray:  { text: '',            cls: ''                  },
+}
 
 export default async function RecoveryPage() {
   const supabase = await createClient()
@@ -70,7 +79,7 @@ export default async function RecoveryPage() {
   }))
   const rhrData = metrics.map((m) => ({ date: m.date, rhr: m.resting_hr }))
 
-  // 7-day sparkline arrays (for mini sparklines in vitals)
+  // 7-day spark arrays for trend direction
   const last7      = metrics.slice(-7)
   const hrvSpark   = last7.map(m => m.hrv_ms ? Number(m.hrv_ms) : null).filter((v): v is number => v != null)
   const sleepSpark = last7.map(m => m.sleep_minutes ? m.sleep_minutes / 60 : null).filter((v): v is number => v != null)
@@ -83,23 +92,23 @@ export default async function RecoveryPage() {
 
   const isUsingMock = !rawMetrics || rawMetrics.length === 0
 
-  const heroStatus = recovery.status as keyof typeof STATUS_HERO
-  const heroConfig = STATUS_HERO[heroStatus] ?? STATUS_HERO.yellow
+  const heroStatus = recovery.status as keyof typeof STATUS_CONFIG
+  const heroConfig = STATUS_CONFIG[heroStatus] ?? STATUS_CONFIG.yellow
 
-  // Today's values for vitals
-  const sleepH    = todayMetrics?.sleep_minutes ? todayMetrics.sleep_minutes / 60 : null
-  const hrvValue  = todayMetrics?.hrv_ms != null ? Math.round(Number(todayMetrics.hrv_ms)) : null
-  const rhrValue  = todayMetrics?.resting_hr ?? null
+  // Today's values
+  const sleepH   = todayMetrics?.sleep_minutes ? todayMetrics.sleep_minutes / 60 : null
+  const hrvValue = todayMetrics?.hrv_ms != null ? Math.round(Number(todayMetrics.hrv_ms)) : null
+  const rhrValue = todayMetrics?.resting_hr ?? null
 
-  // Vitals for the hero grid
+  // Vitals with trend direction (no sparklines)
   const vitals = [
-    sleepH   != null ? { label: 'Sleep',  value: sleepH.toFixed(1),  unit: 'h',   slug: 'sleep',              spark: sleepSpark, higherIsBetter: true  } : null,
-    hrvValue != null ? { label: 'HRV',    value: String(hrvValue),    unit: 'ms',  slug: 'hrv',                spark: hrvSpark,   higherIsBetter: true  } : null,
-    rhrValue != null ? { label: 'RHR',    value: String(rhrValue),    unit: 'bpm', slug: 'resting-heart-rate', spark: rhrSpark,   higherIsBetter: false } : null,
+    sleepH   != null ? { label: 'Sleep', value: sleepH.toFixed(1),  unit: 'h',   slug: 'sleep',              spark: sleepSpark, higherIsBetter: true  } : null,
+    hrvValue != null ? { label: 'HRV',   value: String(hrvValue),    unit: 'ms',  slug: 'hrv',                spark: hrvSpark,   higherIsBetter: true  } : null,
+    rhrValue != null ? { label: 'RHR',   value: String(rhrValue),    unit: 'bpm', slug: 'resting-heart-rate', spark: rhrSpark,   higherIsBetter: false } : null,
   ].filter((v): v is NonNullable<typeof v> => v !== null)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Page header */}
       <div>
         <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Recovery</p>
@@ -110,23 +119,26 @@ export default async function RecoveryPage() {
         )}
       </div>
 
-      {/* Hero — always dark, Oura-style, score dominant */}
+      {/* ── Hero — dark, score dominant ─────────────────────────────────────── */}
       <div className="relative rounded-2xl overflow-hidden bg-zinc-950">
+        {/* Thin status accent */}
         <div className={cn('absolute top-0 left-0 right-0 h-0.5', heroConfig.bar)} />
+
         <div className="px-6 pt-6 pb-6 space-y-5">
 
-          {/* Eyebrow + badge */}
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-white/30 uppercase tracking-widest">Today</span>
-            <span className={cn('text-[11px] font-bold px-2.5 py-1 rounded-full', heroConfig.badge)}>
-              {heroConfig.label}
-            </span>
-          </div>
+          {/* Eyebrow */}
+          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-widest">Today</span>
 
-          {/* Score — dominant number */}
+          {/* Status label — prominent, not just a badge */}
           <div>
-            <p className="text-7xl font-black text-white tabular-nums leading-none tracking-tight">{recovery.score}</p>
-            <p className="text-xs text-white/30 mt-2 uppercase tracking-widest">Recovery score</p>
+            <p className={cn('text-base font-semibold mb-1', heroConfig.labelCls)}>
+              {heroConfig.label}
+            </p>
+            {/* Score — dominant number */}
+            <p className="text-7xl font-black text-white tabular-nums leading-none tracking-tight">
+              {recovery.score}
+            </p>
+            <p className="text-xs text-white/30 mt-2 uppercase tracking-widest">Recovery score · 0–100</p>
           </div>
 
           {/* Issues */}
@@ -138,32 +150,34 @@ export default async function RecoveryPage() {
             </ul>
           )}
 
-          {/* Vitals — integrated into the hero */}
+          {/* Vitals — number + trend label, no sparklines */}
           {vitals.length > 0 && (
             <div className={cn(
               'grid gap-5 border-t border-white/8 pt-5',
               vitals.length === 3 ? 'grid-cols-3' : vitals.length === 2 ? 'grid-cols-2' : 'grid-cols-1',
             )}>
-              {vitals.map(v => (
-                <div key={v.label}>
-                  <p className="text-2xl font-bold text-white tabular-nums leading-none">{v.value}</p>
-                  {v.spark.length >= 2 && (
-                    <div className="my-1.5">
-                      <Sparkline values={v.spark} color={trendColor(v.spark, v.higherIsBetter)} width={56} height={14} />
+              {vitals.map(v => {
+                const colorKey = v.spark.length >= 4 ? trendColor(v.spark, v.higherIsBetter) : 'gray'
+                const trend    = TREND_TEXT[colorKey]
+                return (
+                  <div key={v.label}>
+                    <p className="text-2xl font-bold text-white tabular-nums leading-none">{v.value}</p>
+                    {trend.text && (
+                      <p className={cn('text-xs mt-1', trend.cls)}>{trend.text}</p>
+                    )}
+                    <div className="flex items-center gap-0.5 mt-1.5">
+                      <span className="text-[10px] text-white/35 uppercase tracking-widest">{v.label} {v.unit}</span>
+                      <MetricInfo slug={v.slug} />
                     </div>
-                  )}
-                  <div className="flex items-center gap-0.5">
-                    <span className="text-[10px] text-white/35 uppercase tracking-widest">{v.label} {v.unit}</span>
-                    <MetricInfo slug={v.slug} />
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
       </div>
 
-      {/* 7-day averages — compact inline row */}
+      {/* ── 7-day averages ───────────────────────────────────────────────────── */}
       {(avg7dSleep || avg7dHrv || avg7dRhr) && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 px-1">
           {avg7dSleep && (
@@ -184,11 +198,11 @@ export default async function RecoveryPage() {
         </div>
       )}
 
-      {/* Charts — lighter styling, no heavy card chrome */}
-      <div className="space-y-4">
-        {/* Sleep chart */}
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800">
-          <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+      {/* ── Charts — borderless, just content ───────────────────────────────── */}
+      <div className="space-y-8">
+        {/* Sleep */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Sleep</span>
               <span className="text-xs text-gray-400 dark:text-zinc-500">14 days</span>
@@ -200,32 +214,26 @@ export default async function RecoveryPage() {
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-400 inline-block" /> &lt;6h</span>
             </div>
           </div>
-          <CardContent className="pt-0">
-            <SleepChart data={sleepData} />
-          </CardContent>
+          <SleepChart data={sleepData} />
         </div>
 
-        {/* HRV + RHR side by side */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800">
-            <div className="px-5 pt-4 pb-2 flex items-center gap-1.5">
+        {/* HRV + RHR */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div>
+            <div className="flex items-center gap-1.5 mb-3">
               <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">HRV</span>
               <span className="text-xs text-gray-400 dark:text-zinc-500">14 days</span>
               <MetricInfo slug="hrv" />
             </div>
-            <CardContent className="pt-0">
-              <HrvChart data={hrvData} />
-            </CardContent>
+            <HrvChart data={hrvData} />
           </div>
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800">
-            <div className="px-5 pt-4 pb-2 flex items-center gap-1.5">
+          <div>
+            <div className="flex items-center gap-1.5 mb-3">
               <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Resting HR</span>
               <span className="text-xs text-gray-400 dark:text-zinc-500">14 days</span>
               <MetricInfo slug="resting-heart-rate" />
             </div>
-            <CardContent className="pt-0">
-              <RestingHrChart data={rhrData} />
-            </CardContent>
+            <RestingHrChart data={rhrData} />
           </div>
         </div>
       </div>

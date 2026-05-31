@@ -2,15 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Utensils, Flame, Coffee, Settings } from 'lucide-react'
+import { LayoutDashboard, Utensils, Flame, Heart, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const mobileNavItems = [
-  { href: '/today',      label: 'Today',    icon: LayoutDashboard },
-  { href: '/food',       label: 'Food',     icon: Utensils },
-  { href: '/coffee/add', label: 'Coffee',   icon: Coffee },
-  { href: '/nutrition',  label: 'Nutrition',icon: Flame },
-  { href: '/settings',   label: 'Settings', icon: Settings },
+  { href: '/today',     label: 'Today',     icon: LayoutDashboard },
+  { href: '/recovery',  label: 'Recovery',  icon: Heart },
+  { href: '/food',      label: 'Intake',    icon: Utensils },
+  { href: '/nutrition', label: 'Nutrition', icon: Flame },
+  { href: '/settings',  label: 'Settings',  icon: Settings },
 ]
 
 export function MobileNav() {
@@ -28,7 +28,7 @@ export function MobileNav() {
               className={cn(
                 'flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors min-h-[56px] justify-center',
                 active
-                  ? 'text-blue-600 dark:text-blue-400'
+                  ? 'text-gray-900 dark:text-zinc-50'
                   : 'text-gray-400 dark:text-zinc-600 active:text-gray-600 dark:active:text-zinc-400',
               )}
             >

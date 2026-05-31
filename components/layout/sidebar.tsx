@@ -4,22 +4,21 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Activity, Utensils, Scale, Heart,
-  Brain, Settings, LogOut, Flame, Coffee, BookOpen,
+  Brain, Settings, LogOut, Flame, BookOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
-  { href: '/today',      label: 'Today',    icon: LayoutDashboard },
-  { href: '/activities', label: 'Activities',icon: Activity },
-  { href: '/food',       label: 'Food Log', icon: Utensils },
-  { href: '/coffee/add', label: 'Coffee',   icon: Coffee },
-  { href: '/nutrition',  label: 'Nutrition',icon: Flame },
-  { href: '/weight',     label: 'Weight',   icon: Scale },
-  { href: '/recovery',   label: 'Recovery', icon: Heart },
-  { href: '/coach',      label: 'Coach',    icon: Brain },
-  { href: '/metrics',    label: 'Metrics',  icon: BookOpen },
-  { href: '/settings',   label: 'Settings', icon: Settings },
+  { href: '/today',      label: 'Today',      icon: LayoutDashboard },
+  { href: '/recovery',   label: 'Recovery',   icon: Heart },
+  { href: '/activities', label: 'Activities', icon: Activity },
+  { href: '/food',       label: 'Intake',     icon: Utensils },
+  { href: '/nutrition',  label: 'Nutrition',  icon: Flame },
+  { href: '/weight',     label: 'Weight',     icon: Scale },
+  { href: '/coach',      label: 'Coach',      icon: Brain },
+  { href: '/metrics',    label: 'Metrics',    icon: BookOpen },
+  { href: '/settings',   label: 'Settings',   icon: Settings },
 ]
 
 export function Sidebar() {
@@ -38,8 +37,8 @@ export function Sidebar() {
       {/* Logo */}
       <div className="px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-bold text-sm">K</span>
+          <div className="w-7 h-7 bg-gray-900 dark:bg-zinc-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <span className="text-white dark:text-zinc-900 font-bold text-sm">K</span>
           </div>
           <span className="font-semibold text-gray-900 dark:text-zinc-50 text-sm">KeepGoing</span>
         </div>
@@ -54,10 +53,10 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
+                'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors',
                 active
-                  ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                  : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-zinc-100',
+                  ? 'bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-zinc-50 font-semibold'
+                  : 'font-medium text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-zinc-100',
               )}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
@@ -71,7 +70,7 @@ export function Sidebar() {
       <div className="px-3 py-3 border-t border-gray-100 dark:border-zinc-800">
         <button
           onClick={handleSignOut}
-          className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors w-full"
+          className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-gray-400 dark:text-zinc-500 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors w-full"
         >
           <LogOut className="h-4 w-4 flex-shrink-0" />
           Sign out
