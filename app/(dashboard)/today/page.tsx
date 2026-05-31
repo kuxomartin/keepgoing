@@ -2,15 +2,16 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { format, subDays, startOfDay, differenceInCalendarDays } from 'date-fns'
+import { Sparkline } from '@/components/ui/sparkline'
+import { MetricInfo } from '@/components/ui/metric-info'
+import { trendColor } from '@/lib/spark-utils'
 import { DailyCheckinForm } from '@/components/dashboard/daily-checkin-form'
 import { QuickAddWeight } from '@/components/dashboard/quick-add-weight'
 import { QuickAddFood } from '@/components/dashboard/quick-add-food'
 import { QuickAddActivity } from '@/components/dashboard/quick-add-activity'
 import { QuickActionsPanel } from '@/components/dashboard/quick-actions-panel'
-import { TodayWidget } from '@/components/dashboard/today-widget'
 import { YesterdayWidget } from '@/components/dashboard/yesterday-widget'
 import { TrendWidget } from '@/components/dashboard/trend-widget'
-import { RecommendationCard } from '@/components/dashboard/recommendation-card'
 import { runInsightEngine } from '@/lib/insights/engine'
 import { computeBaselines } from '@/lib/insights/baselines'
 import { computeTrendItems, computeTrendSummary } from '@/lib/insights/trends'
@@ -20,8 +21,45 @@ import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
 import { computeProteinTarget, detectDuckMeat, detectEveningFruit, generateFoodObservationInsights } from '@/lib/profile/food-context'
 import type { HealthMetrics } from '@/types/database'
 import type { DaySummary } from '@/lib/insights/types'
-import Link from 'next/link'
-import { UtensilsCrossed } from 'lucide-react'
+import type { TodayReadiness } from '@/lib/insights/types'
+
+// ── Briefing headline — short sentence per readiness state ─────────────────
+
+const HEADLINE: Record<TodayReadiness, string> = {
+  go:       'Good recovery today.',
+  moderate: 'Take it easy today.',
+  rest:     'Focus on recovery today.',
+}
+
+// ── Metric row — label · value · sparkline (no card, no border) ────────────
+
+function MetricRow({
+  label, value, unit, slug, sparkValues, higherIsBetter,
+}: {
+  label: string
+  value: string
+  unit: string
+  slug: string
+  sparkValues: number[]
+  higherIsBetter: boolean
+}) {
+  const color = sparkValues.length >= 4 ? trendColor(sparkValues, higherIsBetter) : 'gray'
+  return (
+    <div className="grid grid-cols-[4.5rem_5.5rem_1fr] items-center py-2.5">
+      <span className="text-xs font-medium text-gray-400 dark:text-zinc-500">{label}</span>
+      <span className="text-sm font-bold text-gray-900 dark:text-zinc-50 tabular-nums">
+        {value}
+        <span className="text-xs font-normal text-gray-400 dark:text-zinc-500 ml-0.5">{unit}</span>
+      </span>
+      <div className="flex items-center justify-end gap-1.5">
+        {sparkValues.length >= 2 && (
+          <Sparkline values={sparkValues} color={color} width={56} height={14} />
+        )}
+        <MetricInfo slug={slug} />
+      </div>
+    </div>
+  )
+}
 
 // ── Data assembly ─────────────────────────────────────────────────────────────
 
@@ -56,7 +94,7 @@ export default async function TodayPage() {
   const d30ago   = format(subDays(startOfDay(new Date()), 29), 'yyyy-MM-dd')
   const d14ago   = format(subDays(startOfDay(new Date()), 13), 'yyyy-MM-dd')
 
-  // 8 parallel fetches — wider windows for insight engine
+  // 8 parallel fetches
   const [
     { data: metricsRaw },
     { data: foodRaw },
@@ -88,18 +126,15 @@ export default async function TodayPage() {
       .select('energy, stress, soreness')
       .eq('date', today).limit(1),
 
-    // Today's coffee logs — for widget display and insight rules
     supabase.from('coffee_logs')
       .select('consumed_at, cups, caffeine_mg')
       .eq('date', today)
       .order('consumed_at', { ascending: true }),
 
-    // Today's food descriptions — for keyword matching (duck, evening fruit)
     supabase.from('food_logs')
       .select('description, eaten_at')
       .eq('date', today),
 
-    // Personal context (gracefully returns EMPTY_CONTEXT if table is empty)
     loadPersonalContextSummary(supabase),
   ])
 
@@ -129,68 +164,55 @@ export default async function TodayPage() {
     actMins[d] = (actMins[d] ?? 0) + (r.duration_minutes ?? 0)
   }
 
-  // ── Build 30-day timeline ─────────────────────────────────────────────────
+  // ── 30-day timeline ───────────────────────────────────────────────────────
   const dateRange = Array.from({ length: 30 }, (_, i) =>
     format(subDays(startOfDay(new Date()), 29 - i), 'yyyy-MM-dd')
   )
-  const allDays = buildDaySummaries(dateRange, metricsByDate, foodByDate, weightByDate, actMins)
-
+  const allDays   = buildDaySummaries(dateRange, metricsByDate, foodByDate, weightByDate, actMins)
   const historical = allDays.filter(d => d.date < today)
-  const yday = historical.slice(-1)[0] ?? null   // yesterday
+  const yday       = historical.slice(-1)[0] ?? null
 
-  // ── Coffee today ─────────────────────────────────────────────────────────
-  const coffeeLogs    = coffeeRaw ?? []
-  const coffeeCups    = coffeeLogs.reduce((s, l) => s + Number(l.cups), 0)
-  const coffeeMg      = coffeeLogs.reduce((s, l) => s + (l.caffeine_mg ?? 0), 0)
-  const lastCoffeeLog = coffeeLogs.length > 0 ? coffeeLogs[coffeeLogs.length - 1] : null
-  const lastCoffeeTime = lastCoffeeLog
-    ? lastCoffeeLog.consumed_at.slice(11, 16)  // HH:MM from ISO string
-    : null
-  // Hour from consumed_at (treating stored time as local-naive)
-  const lastCoffeeHour = lastCoffeeLog
-    ? parseInt(lastCoffeeLog.consumed_at.slice(11, 13), 10)
-    : null
+  // ── Coffee today ──────────────────────────────────────────────────────────
+  const coffeeLogs     = coffeeRaw ?? []
+  const coffeeCups     = coffeeLogs.reduce((s, l) => s + Number(l.cups), 0)
+  const coffeeMg       = coffeeLogs.reduce((s, l) => s + (l.caffeine_mg ?? 0), 0)
+  const lastCoffeeLog  = coffeeLogs.length > 0 ? coffeeLogs[coffeeLogs.length - 1] : null
+  const lastCoffeeTime = lastCoffeeLog ? lastCoffeeLog.consumed_at.slice(11, 16) : null
+  const lastCoffeeHour = lastCoffeeLog ? parseInt(lastCoffeeLog.consumed_at.slice(11, 13), 10) : null
 
-  // ── Today-specific values ─────────────────────────────────────────────────
-  const realMetrics = metricsByDate[today] as HealthMetrics | null ?? null
-  const todayFood   = foodByDate[today] ?? null
-  const checkin     = checkinRaw?.[0] ?? null
-
+  // ── Today values ──────────────────────────────────────────────────────────
+  const realMetrics     = metricsByDate[today] as HealthMetrics | null ?? null
+  const todayFood       = foodByDate[today] ?? null
   const consumed        = todayFood?.calories ?? null
   const proteinToday    = todayFood?.protein  ?? null
   const fatToday        = todayFood?.fat      ?? null
-  const activityMinutes = actMins[today]      ?? 0
+  const activityMinutes = actMins[today] ?? 0
 
-  // ── Dynamic protein target (#2) ───────────────────────────────────────────
+  // ── Protein target ────────────────────────────────────────────────────────
   const latestWeightKg = latestWeightReal?.weight_kg ?? personalContext.weightCurrentKg ?? null
   const proteinTarget  = computeProteinTarget(personalContext, latestWeightKg, 140)
 
-  // ── Food observation detection (#4 duck, #5 evening fruit) ───────────────
+  // ── Food observation detection ────────────────────────────────────────────
   const todayDescriptions = (todayFoodDesc ?? []) as Array<{ description: string; eaten_at: string | null }>
   const duckFound         = personalContext.hasDuckMeatReaction && detectDuckMeat(todayDescriptions.map(f => f.description))
   const eveningFruitFound = personalContext.eveningFruitContext  && detectEveningFruit(todayDescriptions)
 
-  // ── Run engines ───────────────────────────────────────────────────────────
+  // ── Engines ───────────────────────────────────────────────────────────────
   const engine = runInsightEngine(allDays, today)
 
-  // Coffee insights (#6) — personalized when IgG sensitivity flag exists
-  const coffeeInsights = generateCoffeeInsights({
-    totalCaffeineMg:     coffeeMg > 0 ? coffeeMg : null,
+  const coffeeInsights  = generateCoffeeInsights({
+    totalCaffeineMg: coffeeMg > 0 ? coffeeMg : null,
     lastCoffeeHour,
     hasCoffeeSensitivity: personalContext.hasCoffeeSensitivity,
   })
-
-  // Food observation insights (#4, #5) — max 2, self-reported only
   const foodObsInsights = generateFoodObservationInsights({ duckFound, eveningFruitFound })
+  // Merged insights available for future use — not rendered in this pass
+  const _allInsights    = [...foodObsInsights, ...coffeeInsights, ...engine.insights].slice(0, 5)
 
-  // Merge: food-obs first (highest severity), then coffee warnings, then engine
-  const allInsights = [...foodObsInsights, ...coffeeInsights, ...engine.insights].slice(0, 5)
   const trendItems   = computeTrendItems(historical)
   const trendSummary = computeTrendSummary(trendItems)
 
-  // Recovery metrics for TodayWidget:
-  // If today has no Apple Health data, fall back to the most recent historical day
-  // that has HRV / sleep / RHR — mirrors the engine's usingFallback logic.
+  // ── Recovery fallback ─────────────────────────────────────────────────────
   const fallbackRecovery = engine.usingFallback
     ? [...historical].reverse().find(d => d.hrv != null || d.sleepMinutes != null || d.restingHr != null)
     : undefined
@@ -201,116 +223,185 @@ export default async function TodayPage() {
       ? fallbackRecovery.sleepMinutes / 60
       : null
 
-  const widgetHrv = realMetrics?.hrv_ms      ?? fallbackRecovery?.hrv      ?? null
-  const widgetRhr = realMetrics?.resting_hr  ?? fallbackRecovery?.restingHr ?? null
+  const widgetHrv = realMetrics?.hrv_ms     ?? fallbackRecovery?.hrv      ?? null
+  const widgetRhr = realMetrics?.resting_hr ?? fallbackRecovery?.restingHr ?? null
 
-  // 7-day calorie baseline for YesterdayWidget context
+  // ── 7-day sparklines for metric rows ─────────────────────────────────────
+  const last7      = historical.slice(-7)
+  const sleepSpark = last7.map(d => d.sleepMinutes).filter((v): v is number => v != null).map(m => m / 60)
+  const hrvSpark   = last7.map(d => d.hrv).filter((v): v is number => v != null)
+  const rhrSpark   = last7.map(d => d.restingHr).filter((v): v is number => v != null)
+
+  // ── Calorie baseline for yesterday context ────────────────────────────────
   const calBase7d = (() => {
-    const vals = historical.slice(-7)
-      .map(d => d.calories)
-      .filter((v): v is number => v != null && v > 400)
+    const vals = historical.slice(-7).map(d => d.calories).filter((v): v is number => v != null && v > 400)
     return vals.length >= 3 ? vals.reduce((a, b) => a + b, 0) / vals.length : null
   })()
 
-  // ── Recommendation engine inputs ─────────────────────────────────────────
+  // ── Daily recommendation (kept for future use) ────────────────────────────
   const baselines = computeBaselines(historical)
-
-  // Days since last bike ride (activity_type = 'ride'), within 30-day window
   const bikeRides = (activitiesRaw ?? [])
     .filter((r): r is typeof r & { activity_type: string } => r.activity_type === 'ride')
-    .map(r => r.start_time.slice(0, 10))
-    .sort()
-    .reverse()
-
+    .map(r => r.start_time.slice(0, 10)).sort().reverse()
   const daysSinceLastBike: number | null = bikeRides.length > 0
     ? differenceInCalendarDays(new Date(), new Date(bikeRides[0] + 'T12:00:00'))
     : null
-
-  // Weekly activity minutes (last 7 days including today)
   const d7ago = format(subDays(startOfDay(new Date()), 6), 'yyyy-MM-dd')
   const weeklyActivityMins = Object.entries(actMins)
     .filter(([d]) => d >= d7ago && d <= today)
     .reduce((sum, [, mins]) => sum + mins, 0)
-
-  const dailyRec = generateDailyRecommendation({
-    todayHrv:           realMetrics?.hrv_ms       != null ? Number(realMetrics.hrv_ms) : null,
-    hrv14dBaseline:     baselines.hrv14d,
-    todaySleepH:        widgetSleepH,
-    consumedKcal:       consumed,
-    proteinG:           proteinToday,
-    fatG:               fatToday,
+  const _dailyRec = generateDailyRecommendation({
+    todayHrv:       realMetrics?.hrv_ms != null ? Number(realMetrics.hrv_ms) : null,
+    hrv14dBaseline: baselines.hrv14d,
+    todaySleepH:    widgetSleepH,
+    consumedKcal:   consumed,
+    proteinG:       proteinToday,
+    fatG:           fatToday,
     historical,
     yday,
     weeklyActivityMins,
     daysSinceLastBike,
-    proteinTargetG:     proteinTarget.grams,
+    proteinTargetG:  proteinTarget.grams,
     personalContext,
   })
 
+  // ── Derived flags ─────────────────────────────────────────────────────────
+  const hasLogged = consumed != null || proteinToday != null || activityMinutes > 0 || coffeeCups > 0
 
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
-      {/* Date header */}
-      <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">{longDate}</p>
+    <div>
 
-      {/* ━━━ HERO — TODAY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <TodayWidget
-        readiness={engine.todayReadiness}
-        interpretation={engine.todayInterpretation}
-        recommendation={engine.todayRecommendation}
-        supporting={engine.todaySupporting}
-        usingFallback={engine.usingFallback}
-        sleepH={widgetSleepH}
-        hrv={widgetHrv}
-        rhr={widgetRhr}
-        consumedKcal={consumed}
-        proteinG={proteinToday}
-        activityMinutes={activityMinutes}
-        coffeeCups={coffeeCups}
-        coffeeMg={coffeeMg > 0 ? coffeeMg : null}
-        lastCoffeeTime={lastCoffeeTime}
-      />
+      {/* ── DATE ─────────────────────────────────────────────────────────── */}
+      <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-8">
+        {longDate}
+      </p>
 
-      {/* ━━━ RECOMMENDATION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <RecommendationCard rec={dailyRec} />
+      {/* ── BRIEFING ─────────────────────────────────────────────────────── */}
 
-      {/* ━━━ CONTEXT: Yesterday + Trend — combined flat panel ━━━━━━━━━━━━━━ */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 divide-y divide-gray-100 dark:divide-zinc-800">
-        <div className="px-5 py-4">
-          <YesterdayWidget yday={yday} calBase7d={calBase7d} />
-        </div>
-        <div className="px-5 py-4">
-          <TrendWidget
-            items={trendItems}
-            interpretation={trendSummary.interpretation}
-            recommendation={trendSummary.recommendation}
-          />
-        </div>
+      {/* 1. Headline — the hero */}
+      <h1 className="text-4xl font-bold text-gray-900 dark:text-zinc-50 leading-tight tracking-tight mb-3">
+        {HEADLINE[engine.todayReadiness]}
+      </h1>
+
+      {/* 2. Interpretation — the why */}
+      <p className="text-base text-gray-500 dark:text-zinc-400 leading-relaxed mb-4">
+        {engine.todayInterpretation}
+        {engine.usingFallback && (
+          <span className="text-gray-400 dark:text-zinc-600"> Based on yesterday&apos;s data.</span>
+        )}
+      </p>
+
+      {/* 3. Recommendation — the what, visually separated */}
+      <div className="flex items-start gap-2 mb-8">
+        <span className="text-gray-300 dark:text-zinc-600 mt-0.5 select-none" aria-hidden="true">→</span>
+        <p className="text-base font-semibold text-gray-800 dark:text-zinc-200 leading-relaxed">
+          {engine.todayRecommendation}
+        </p>
       </div>
 
-      {/* ━━━ QUICK ACTIONS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      {/* Add Meal shortcut (mobile) */}
-      <Link
-        href="/food/add?from=today"
-        className="lg:hidden flex items-center justify-between bg-white dark:bg-zinc-900 rounded-2xl border border-gray-100 dark:border-zinc-800 px-5 py-4 hover:border-blue-200 dark:hover:border-blue-500/30 transition-all group"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-blue-50 dark:bg-blue-500/10 rounded-xl flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-500/20 transition-colors">
-            <UtensilsCrossed className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+      {/* ── METRICS ──────────────────────────────────────────────────────── */}
+      {(widgetSleepH != null || widgetHrv != null || widgetRhr != null) && (
+        <div className="border-t border-gray-100 dark:border-zinc-800 pt-1 mb-6 divide-y divide-gray-50 dark:divide-zinc-900/80">
+          {widgetSleepH != null && (
+            <MetricRow
+              label="Sleep"
+              value={widgetSleepH.toFixed(1)}
+              unit="h"
+              slug="sleep"
+              sparkValues={sleepSpark}
+              higherIsBetter={true}
+            />
+          )}
+          {widgetHrv != null && (
+            <MetricRow
+              label="HRV"
+              value={String(Math.round(Number(widgetHrv)))}
+              unit="ms"
+              slug="hrv"
+              sparkValues={hrvSpark}
+              higherIsBetter={true}
+            />
+          )}
+          {widgetRhr != null && (
+            <MetricRow
+              label="RHR"
+              value={String(widgetRhr)}
+              unit="bpm"
+              slug="resting-heart-rate"
+              sparkValues={rhrSpark}
+              higherIsBetter={false}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ── TODAY LOGGED ─────────────────────────────────────────────────── */}
+      {hasLogged && (
+        <div className="mb-7">
+          <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-2">
+            Today logged
+          </p>
+          <div className="space-y-1 text-sm text-gray-600 dark:text-zinc-400">
+            {(consumed != null || proteinToday != null) && (
+              <p>
+                {consumed != null && (
+                  <span className="font-semibold text-gray-800 dark:text-zinc-200 tabular-nums">
+                    {consumed.toLocaleString()} kcal
+                  </span>
+                )}
+                {consumed != null && proteinToday != null && (
+                  <span className="text-gray-300 dark:text-zinc-700"> · </span>
+                )}
+                {proteinToday != null && (
+                  <span>{Math.round(proteinToday)}g protein</span>
+                )}
+              </p>
+            )}
+            {coffeeCups > 0 && (
+              <p>
+                ☕{' '}
+                {coffeeCups % 1 === 0 ? coffeeCups : coffeeCups.toFixed(1)} cup{coffeeCups !== 1 ? 's' : ''}
+                {coffeeMg > 0 && (
+                  <span className="text-gray-400 dark:text-zinc-600"> · {coffeeMg}mg caffeine</span>
+                )}
+                {lastCoffeeTime && (
+                  <span className="text-gray-400 dark:text-zinc-600"> · last {lastCoffeeTime}</span>
+                )}
+              </p>
+            )}
+            {activityMinutes > 0 && (
+              <p>{activityMinutes} min active</p>
+            )}
           </div>
-          <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Log a meal</p>
         </div>
-        <span className="text-blue-500 dark:text-blue-400 font-semibold text-lg leading-none">+</span>
-      </Link>
+      )}
 
-      <QuickActionsPanel />
-      <DailyCheckinForm />
-
-      <div className="hidden lg:grid grid-cols-3 gap-4">
-        <QuickAddWeight />
-        <QuickAddFood />
-        <QuickAddActivity />
+      {/* ── YESTERDAY ────────────────────────────────────────────────────── */}
+      <div className="border-t border-gray-100 dark:border-zinc-800 pt-5 mb-6">
+        <YesterdayWidget yday={yday} calBase7d={calBase7d} />
       </div>
+
+      {/* ── RECENT TREND ─────────────────────────────────────────────────── */}
+      <div className="border-t border-gray-100 dark:border-zinc-800 pt-5 mb-8">
+        <TrendWidget
+          items={trendItems}
+          interpretation={trendSummary.interpretation}
+          recommendation={trendSummary.recommendation}
+        />
+      </div>
+
+      {/* ── QUICK ACTIONS ────────────────────────────────────────────────── */}
+      <div className="border-t border-gray-100 dark:border-zinc-800 pt-5 space-y-4">
+        <QuickActionsPanel />
+        <DailyCheckinForm />
+        <div className="hidden lg:grid grid-cols-3 gap-4">
+          <QuickAddWeight />
+          <QuickAddFood />
+          <QuickAddActivity />
+        </div>
+      </div>
+
     </div>
   )
 }
