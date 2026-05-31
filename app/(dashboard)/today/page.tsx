@@ -8,10 +8,10 @@ import { cn } from '@/lib/utils'
 import { DailyCheckinForm } from '@/components/dashboard/daily-checkin-form'
 import { QuickAddWeight } from '@/components/dashboard/quick-add-weight'
 import { QuickAddFood } from '@/components/dashboard/quick-add-food'
-import { QuickAddActivity } from '@/components/dashboard/quick-add-activity'
 import { QuickActionsPanel } from '@/components/dashboard/quick-actions-panel'
 import { YesterdayWidget } from '@/components/dashboard/yesterday-widget'
 import { TrendWidget } from '@/components/dashboard/trend-widget'
+import { QuickAddCoffeeLink } from '@/components/dashboard/quick-add-coffee-link'
 import { runInsightEngine } from '@/lib/insights/engine'
 import { computeBaselines } from '@/lib/insights/baselines'
 import { computeTrendItems, computeTrendSummary } from '@/lib/insights/trends'
@@ -21,16 +21,6 @@ import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
 import { computeProteinTarget, detectDuckMeat, detectEveningFruit, generateFoodObservationInsights } from '@/lib/profile/food-context'
 import type { HealthMetrics } from '@/types/database'
 import type { DaySummary } from '@/lib/insights/types'
-import type { TodayReadiness } from '@/lib/insights/types'
-
-// ── Briefing headline — short sentence per readiness state ─────────────────
-
-const HEADLINE: Record<TodayReadiness, string> = {
-  go:       'Good recovery today.',
-  moderate: 'Take it easy today.',
-  rest:     'Focus on recovery today.',
-}
-
 // ── Trend label config ────────────────────────────────────────────────────────
 
 const TREND: Record<string, { arrow: string; label: string; cls: string }> = {
@@ -212,7 +202,8 @@ export default async function TodayPage() {
   const eveningFruitFound = personalContext.eveningFruitContext  && detectEveningFruit(todayDescriptions)
 
   // ── Engines ───────────────────────────────────────────────────────────────
-  const engine = runInsightEngine(allDays, today)
+  const checkinData = checkinRaw?.[0] ?? null
+  const engine = runInsightEngine(allDays, today, checkinData)
 
   const coffeeInsights  = generateCoffeeInsights({
     totalCaffeineMg: coffeeMg > 0 ? coffeeMg : null,
@@ -295,7 +286,7 @@ export default async function TodayPage() {
 
       {/* 1. Headline — the hero */}
       <h1 className="text-4xl font-bold text-gray-900 dark:text-zinc-50 leading-tight tracking-tight mb-3">
-        {HEADLINE[engine.todayReadiness]}
+        {engine.todayHeadline}
       </h1>
 
       {/* 2. Interpretation — the why */}
@@ -414,9 +405,9 @@ export default async function TodayPage() {
         <QuickActionsPanel />
         <DailyCheckinForm existingCheckin={checkinRaw?.[0] ?? null} />
         <div className="hidden lg:grid grid-cols-3 gap-4">
-          <QuickAddWeight />
           <QuickAddFood />
-          <QuickAddActivity />
+          <QuickAddCoffeeLink />
+          <QuickAddWeight />
         </div>
       </div>
 

@@ -51,14 +51,16 @@ export interface Baselines {
   activityMinutes14d: number | null
 }
 
-export type TodayReadiness = 'go' | 'moderate' | 'rest'
+export type TodayReadiness = 'push' | 'train' | 'easy' | 'recover'
 
 export interface InsightEngineOutput {
   insights: Insight[]
   todayReadiness: TodayReadiness
-  /** One sentence describing the recovery state. e.g. "HRV is 12% above baseline." */
+  /** Short headline sentence — the dominant text on the Today page. Contextually generated. */
+  todayHeadline: string
+  /** One sentence describing the recovery state — the why. */
   todayInterpretation: string
-  /** One sentence telling the user what to do. e.g. "A hard session is on the table." */
+  /** One sentence telling the user what to do — the what. */
   todayRecommendation: string
   /** Supporting evidence bullets (up to 3). */
   todaySupporting: string[]

@@ -80,14 +80,22 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Activities</h1>
-        <p className="mt-1 text-sm text-gray-500">Your training sessions and movement history.</p>
-        {isUsingMock && (
-          <p className="mt-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 inline-block">
-            Showing demo data
-          </p>
-        )}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Activities</h1>
+          <p className="mt-1 text-sm text-gray-500">Your training sessions and movement history.</p>
+          {isUsingMock && (
+            <p className="mt-1 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 inline-block">
+              Showing demo data
+            </p>
+          )}
+        </div>
+        <Link
+          href="/activities/add"
+          className="flex-shrink-0 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:border-gray-300 hover:text-gray-900 transition-colors whitespace-nowrap"
+        >
+          + Add Manually
+        </Link>
       </div>
 
       {/* Weekly chart */}

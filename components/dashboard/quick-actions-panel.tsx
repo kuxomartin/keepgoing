@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { Utensils, Scale, ClipboardList, Activity, Coffee } from 'lucide-react'
+import { Utensils, Scale, ClipboardList, Coffee } from 'lucide-react'
 
-type ActivePanel = 'weight' | 'checkin' | 'activity' | null
+type ActivePanel = 'weight' | 'checkin' | null
 
 // ── Weight ──────────────────────────────────────────────────────────────────
 function WeightForm({ onDone }: { onDone: () => void }) {
@@ -192,18 +192,16 @@ function CheckinForm({ onDone }: { onDone: () => void }) {
 // ── Panel (mobile-only, hidden on lg+) ───────────────────────────────────────
 
 type PanelButton =
-  | { id: 'meal';     label: string; icon: typeof Utensils;      href: string }
-  | { id: 'coffee';   label: string; icon: typeof Coffee;        href: string }
-  | { id: 'weight';   label: string; icon: typeof Scale;         href?: undefined }
-  | { id: 'checkin';  label: string; icon: typeof ClipboardList; href?: undefined }
-  | { id: 'activity'; label: string; icon: typeof Activity;      href?: undefined }
+  | { id: 'meal';    label: string; icon: typeof Utensils;      href: string }
+  | { id: 'coffee';  label: string; icon: typeof Coffee;        href: string }
+  | { id: 'weight';  label: string; icon: typeof Scale;         href?: undefined }
+  | { id: 'checkin'; label: string; icon: typeof ClipboardList; href?: undefined }
 
 const PANEL_BUTTONS: PanelButton[] = [
-  { id: 'meal',     label: 'Meal',     icon: Utensils,      href: '/food/add?from=today' },
-  { id: 'coffee',   label: 'Coffee',   icon: Coffee,        href: '/coffee/add?from=today' },
-  { id: 'weight',   label: 'Weight',   icon: Scale },
-  { id: 'checkin',  label: 'Check-in', icon: ClipboardList },
-  { id: 'activity', label: 'Activity', icon: Activity },
+  { id: 'meal',    label: 'Meal',     icon: Utensils,      href: '/food/add?from=today' },
+  { id: 'coffee',  label: 'Coffee',   icon: Coffee,        href: '/coffee/add?from=today' },
+  { id: 'weight',  label: 'Weight',   icon: Scale },
+  { id: 'checkin', label: 'Check-in', icon: ClipboardList },
 ]
 
 export function QuickActionsPanel() {
@@ -263,9 +261,8 @@ export function QuickActionsPanel() {
       {active && (
         <Card>
           <CardContent className="py-5">
-            {active === 'weight'   && <WeightForm   onDone={() => setActive(null)} />}
-            {active === 'checkin'  && <CheckinForm  onDone={() => setActive(null)} />}
-            {active === 'activity' && <ActivityForm onDone={() => setActive(null)} />}
+            {active === 'weight'  && <WeightForm  onDone={() => setActive(null)} />}
+            {active === 'checkin' && <CheckinForm onDone={() => setActive(null)} />}
           </CardContent>
         </Card>
       )}

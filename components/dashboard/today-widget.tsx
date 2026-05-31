@@ -24,20 +24,25 @@ interface Props {
 }
 
 const STATUS = {
-  go: {
+  push: {
+    bar:   'bg-emerald-400',
+    badge: 'bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-400/30',
+    label: 'Push day',
+  },
+  train: {
     bar:   'bg-emerald-500',
     badge: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30',
     label: 'Ready to train',
   },
-  moderate: {
+  easy: {
     bar:   'bg-amber-400',
     badge: 'bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/30',
-    label: 'Take it easy',
+    label: 'Easy day',
   },
-  rest: {
+  recover: {
     bar:   'bg-rose-500',
     badge: 'bg-rose-500/15 text-rose-400 ring-1 ring-rose-500/30',
-    label: 'Rest day',
+    label: 'Recovery day',
   },
 } as const
 

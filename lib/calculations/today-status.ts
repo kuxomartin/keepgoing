@@ -6,7 +6,8 @@
 
 import type { RecoveryResult } from '@/types/database'
 
-export type TodayReadiness = 'go' | 'moderate' | 'rest'
+/** @deprecated Use TodayReadiness from lib/insights/types instead */
+export type TodayReadiness = 'push' | 'train' | 'easy' | 'recover'
 
 export interface TodayStatusResult {
   readiness: TodayReadiness
@@ -33,7 +34,7 @@ export function computeTodayStatus({
   // No real health data yet
   if (recovery == null) {
     return {
-      readiness: 'moderate',
+      readiness: 'easy',
       headline: 'No health data yet today — check back after Apple Health syncs.',
       supporting: [],
     }
@@ -41,10 +42,10 @@ export function computeTodayStatus({
 
   const supporting: string[] = []
 
-  // Base readiness from recovery score
+  // Base readiness from recovery score — deprecated, use runInsightEngine() instead
   let readiness: TodayReadiness =
-    recovery.score >= 70 ? 'go' :
-    recovery.score >= 45 ? 'moderate' : 'rest'
+    recovery.score >= 70 ? 'train' :
+    recovery.score >= 45 ? 'easy' : 'recover'
 
   // Sleep signal
   if (sleepHours != null) {
@@ -52,10 +53,9 @@ export function computeTodayStatus({
       supporting.push(`Sleep ${sleepHours.toFixed(1)}h — good rest`)
     } else if (sleepHours >= 6) {
       supporting.push(`Sleep ${sleepHours.toFixed(1)}h — slightly below target`)
-      if (readiness === 'go') readiness = 'moderate'
     } else {
       supporting.push(`Sleep ${sleepHours.toFixed(1)}h — short night, take it easy`)
-      readiness = 'rest'
+      readiness = 'recover'
     }
   }
 
@@ -67,7 +67,6 @@ export function computeTodayStatus({
   // Subjective check-in modifiers
   if (checkin?.energy != null && checkin.energy <= 3) {
     supporting.push(`Energy check-in: ${checkin.energy}/10 — feeling drained`)
-    if (readiness === 'go') readiness = 'moderate'
   }
   if (checkin?.stress != null && checkin.stress >= 8) {
     supporting.push(`Stress: ${checkin.stress}/10 — high mental load`)
@@ -82,9 +81,10 @@ export function computeTodayStatus({
   }
 
   const HEADLINES: Record<TodayReadiness, string> = {
-    go:       'Recovery looks good. A hard session is on the table.',
-    moderate: 'Readiness is moderate. Keep intensity controlled.',
-    rest:     'Recovery is low. Prioritise rest or easy movement.',
+    push:    'Peak readiness. A quality session is on the table.',
+    train:   'Recovery looks good. A training day.',
+    easy:    'Readiness is moderate. Keep intensity controlled.',
+    recover: 'Recovery is low. Prioritise rest or easy movement.',
   }
 
   return {

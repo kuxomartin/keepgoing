@@ -9,25 +9,32 @@ interface Props {
 
 export function TodayStatus({ readiness, headline, supporting }: Props) {
   const styles = {
-    go: {
+    push: {
+      wrap:  'bg-emerald-50 border-emerald-200',
+      dot:   'bg-emerald-400',
+      badge: 'bg-emerald-100 text-emerald-700',
+      label: 'Push day',
+      text:  'text-emerald-900',
+    },
+    train: {
       wrap:  'bg-green-50 border-green-200',
       dot:   'bg-green-500',
       badge: 'bg-green-100 text-green-700',
-      label: 'Good to go',
+      label: 'Ready to train',
       text:  'text-green-900',
     },
-    moderate: {
+    easy: {
       wrap:  'bg-yellow-50 border-yellow-200',
       dot:   'bg-yellow-400',
       badge: 'bg-yellow-100 text-yellow-700',
-      label: 'Take it easy',
+      label: 'Easy day',
       text:  'text-yellow-900',
     },
-    rest: {
+    recover: {
       wrap:  'bg-red-50 border-red-200',
       dot:   'bg-red-400',
       badge: 'bg-red-100 text-red-700',
-      label: 'Rest day',
+      label: 'Recovery day',
       text:  'text-red-900',
     },
   }[readiness]

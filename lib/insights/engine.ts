@@ -12,21 +12,235 @@ import { computeBaselines, linearSlope } from './baselines'
 import { generateInsights } from './rules'
 import type { DaySummary, InsightEngineOutput, TodayReadiness } from './types'
 
-// ── Today status generation ────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/** Count consecutive "easy" days ending at yesterday (< 20 min activity). */
+function countConsecutiveEasyDays(historical: DaySummary[]): number {
+  let count = 0
+  for (let i = historical.length - 1; i >= 0; i--) {
+    if (historical[i].activityMinutes < 20) count++
+    else break
+  }
+  return count
+}
 
 /**
- * Produces a split interpretation + recommendation for the TODAY widget.
- *
- * Fallback behaviour: when today has no recovery data, uses the most recent
- * historical day instead. This allows the app to always give useful guidance
- * rather than showing a "no data" message.
+ * Days since last session with ≥ 45 min activity.
+ * 0 = yesterday, 1 = day before, null = none in window.
  */
+function daysSinceHardSession(historical: DaySummary[]): number | null {
+  for (let i = historical.length - 1; i >= 0; i--) {
+    if (historical[i].activityMinutes >= 45) {
+      return historical.length - 1 - i
+    }
+  }
+  return null
+}
+
+function ordinalDay(n: number): string {
+  const words = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh']
+  return words[n] ?? `${n}th`
+}
+
+// ── 4-state readiness decision ─────────────────────────────────────────────────
+
+interface ReadinessInputs {
+  hrvRatio:             number | null  // HRV / 14d baseline
+  sleepH:               number | null
+  load7d:               number          // activity minutes last 7 days
+  consecutiveEasyDays:  number
+  daysSinceHard:        number | null   // null = no hard session in window
+  checkinEnergy:        number | null   // 1-10
+  checkinSoreness:      number | null   // 1-10 (higher = more sore)
+}
+
+function determineReadiness(i: ReadinessInputs): TodayReadiness {
+  // ── RECOVER — hard gates (acute need) ──────────────────────────────────────
+  if (i.sleepH != null && i.sleepH < 5.5) return 'recover'
+  if (i.checkinEnergy != null && i.checkinEnergy <= 2) return 'recover'
+  // HRV severely suppressed AND recently trained AND not already in rest pattern
+  if (
+    i.hrvRatio != null && i.hrvRatio < 0.82 &&
+    i.daysSinceHard != null && i.daysSinceHard <= 1 &&
+    i.consecutiveEasyDays < 2
+  ) return 'recover'
+
+  // ── PUSH — peak readiness ──────────────────────────────────────────────────
+  if (
+    i.hrvRatio != null && i.hrvRatio >= 1.10 &&
+    (i.sleepH == null || i.sleepH >= 7) &&
+    i.load7d < 350 &&
+    (i.checkinEnergy == null || i.checkinEnergy >= 7)
+  ) return 'push'
+
+  // ── TRAIN — solid readiness ────────────────────────────────────────────────
+  if (
+    (i.hrvRatio == null || i.hrvRatio >= 0.95) &&
+    (i.sleepH == null || i.sleepH >= 6.5) &&
+    i.load7d < 500 &&
+    (i.checkinEnergy == null || i.checkinEnergy >= 5)
+  ) return 'train'
+
+  // ── EASY — HRV suppressed but already resting ──────────────────────────────
+  // If the body has been in low-activity mode for 2+ days, more passive rest
+  // is not the answer. Gentle movement is appropriate.
+  if (i.hrvRatio != null && i.hrvRatio < 0.82 && i.consecutiveEasyDays >= 2) return 'easy'
+
+  // ── EASY — everything else (moderate suppression, high load, soreness) ─────
+  return 'easy'
+}
+
+// ── Contextual copy generation ─────────────────────────────────────────────────
+
+interface CopyInputs {
+  readiness:           TodayReadiness
+  hrvRatio:            number | null
+  sleepH:              number | null
+  load7d:              number
+  consecutiveEasyDays: number
+  daysSinceHard:       number | null
+  checkinEnergy:       number | null
+  checkinSoreness:     number | null
+  hrvMs:               number | null
+}
+
+function generateCopy(i: CopyInputs): {
+  headline: string
+  interpretation: string
+  recommendation: string
+} {
+  const hrvPctBelow = i.hrvRatio != null ? Math.round((1 - i.hrvRatio) * 100) : null
+  const hrvPctAbove = i.hrvRatio != null ? Math.round((i.hrvRatio - 1) * 100) : null
+
+  if (i.readiness === 'recover') {
+    if (i.sleepH != null && i.sleepH < 5.5) {
+      return {
+        headline:       'Short sleep — a full recovery day.',
+        interpretation: `Sleep was short at ${i.sleepH.toFixed(1)}h — recovery takes priority.`,
+        recommendation: 'Rest, hydration, and an early bedtime tonight. Skip training today.',
+      }
+    }
+    if (i.checkinEnergy != null && i.checkinEnergy <= 2) {
+      return {
+        headline:       'Energy is very low — the body needs rest today.',
+        interpretation: 'Subjective energy is critically low. Recovery markers confirm this.',
+        recommendation: 'No training. Prioritise sleep, nutrition, and stress reduction.',
+      }
+    }
+    // HRV low + recently trained
+    return {
+      headline:       'Focus on recovery today.',
+      interpretation: hrvPctBelow != null
+        ? `HRV is ${hrvPctBelow}% below baseline after recent training.`
+        : 'Multiple recovery markers are suppressed.',
+      recommendation: 'Prioritise rest, good nutrition, and an early bedtime tonight.',
+    }
+  }
+
+  if (i.readiness === 'push') {
+    return {
+      headline:       hrvPctAbove != null
+        ? `HRV is ${hrvPctAbove}% above baseline — this is a quality day.`
+        : 'Peak readiness today.',
+      interpretation: i.sleepH != null && i.sleepH >= 7.5
+        ? `You slept ${i.sleepH.toFixed(1)}h and recovery looks strong.`
+        : `Recovery is elevated${i.hrvMs != null ? ` (HRV ${Math.round(i.hrvMs)} ms)` : ''}.`,
+      recommendation: i.load7d < 200
+        ? 'Minimal cumulative fatigue and strong recovery — push the intensity.'
+        : 'Today is your day for a quality session.',
+    }
+  }
+
+  if (i.readiness === 'train') {
+    const headline = i.hrvRatio != null && i.hrvRatio >= 1.05
+      ? 'Good recovery today.'
+      : i.sleepH != null && i.sleepH >= 7.5
+        ? 'Good recovery today.'
+        : 'Recovery looks solid for training.'
+
+    const interpretation = i.hrvRatio != null && i.hrvRatio >= 0.98
+      ? `HRV is near baseline${i.hrvMs != null ? ` (${Math.round(i.hrvMs)} ms)` : ''} and sleep was adequate.`
+      : i.sleepH != null && i.sleepH >= 7
+        ? `You slept ${i.sleepH.toFixed(1)}h and recovery looks solid.`
+        : 'Recovery is at a reasonable level.'
+
+    const recommendation = i.load7d > 350
+      ? 'A moderate to hard session is reasonable — watch cumulative load.'
+      : 'A moderate to hard session is appropriate today.'
+
+    return { headline, interpretation, recommendation }
+  }
+
+  // ── EASY ────────────────────────────────────────────────────────────────────
+  // Key case: HRV suppressed but already in rest pattern
+  if (
+    i.hrvRatio != null && i.hrvRatio < 0.82 &&
+    i.consecutiveEasyDays >= 2
+  ) {
+    const n = i.consecutiveEasyDays
+    return {
+      headline:       `Recovery is suppressed, but this is already your ${ordinalDay(n)} consecutive easy day.`,
+      interpretation: hrvPctBelow != null
+        ? `HRV remains ${hrvPctBelow}% below baseline despite ${n} days of lighter activity.`
+        : `Recovery markers remain low after ${n} easy days.`,
+      recommendation: 'Consider a walk, gym session, or easy Zone 2 ride.',
+    }
+  }
+
+  // High weekly load
+  if (i.load7d > 350) {
+    return {
+      headline:       'Take it easy today.',
+      interpretation: `Training load has been high this week (${Math.round(i.load7d)} min).`,
+      recommendation: 'Zone 2 or mobility work — keep intensity low and let the body adapt.',
+    }
+  }
+
+  // Moderate HRV dip
+  if (i.hrvRatio != null && i.hrvRatio < 0.95) {
+    return {
+      headline:       'Take it easy today.',
+      interpretation: hrvPctBelow != null
+        ? `HRV is ${hrvPctBelow}% below baseline — lighter effort is the right call.`
+        : 'Recovery is at a moderate level.',
+      recommendation: i.sleepH != null && i.sleepH < 6.5
+        ? 'Zone 2 or technique work — short sleep limits adaptation.'
+        : 'Zone 2 or easy effort today.',
+    }
+  }
+
+  // Soreness or low energy
+  if (i.checkinSoreness != null && i.checkinSoreness >= 7) {
+    return {
+      headline:       'Body is sore — movement is fine, intensity is not.',
+      interpretation: 'Soreness is elevated from recent training load.',
+      recommendation: 'Light movement, mobility, or an easy walk.',
+    }
+  }
+
+  // Generic easy
+  return {
+    headline:       'Take it easy today.',
+    interpretation: 'Recovery is at a moderate level.',
+    recommendation: 'Moderate effort or a lighter session.',
+  }
+}
+
+// ── Today status generation ────────────────────────────────────────────────────
+
+interface Checkin {
+  energy:   number | null
+  soreness: number | null
+}
+
 function generateTodayStatus(
   today: DaySummary | null,
   historical: DaySummary[],
   baselines: ReturnType<typeof computeBaselines>,
+  checkin: Checkin | null,
 ): {
   readiness: TodayReadiness
+  headline: string
   interpretation: string
   recommendation: string
   supporting: string[]
@@ -37,7 +251,6 @@ function generateTodayStatus(
     today != null &&
     (today.hrv != null || today.sleepMinutes != null || today.restingHr != null)
 
-  // If not, try the most recent historical day with recovery data
   const refDay = todayHasData
     ? today
     : [...historical].reverse().find(
@@ -46,137 +259,96 @@ function generateTodayStatus(
 
   const usingFallback = !todayHasData && refDay != null
 
-  // No data at all — give neutral guidance without a sync message
+  // No data at all — neutral guidance
   if (!refDay) {
     return {
-      readiness: 'moderate',
-      interpretation: 'Recovery picture is still building.',
+      readiness: 'easy',
+      headline:       'Recovery picture is still building.',
+      interpretation: 'Not enough data yet for a reliable readiness score.',
       recommendation: 'Moderate intensity is a safe default until more data arrives.',
       supporting: [],
       usingFallback: false,
     }
   }
 
-  const supporting: string[] = []
-  let readiness: TodayReadiness = 'moderate'
+  // ── Derived inputs ──────────────────────────────────────────────────────────
+  const hrvRatio = refDay.hrv != null && baselines.hrv14d != null
+    ? refDay.hrv / baselines.hrv14d
+    : null
 
-  // ── HRV vs 14-day baseline ──────────────────────────────────────────────
-  const hrvRatio =
-    refDay.hrv != null && baselines.hrv14d != null
-      ? refDay.hrv / baselines.hrv14d
-      : null
+  const sleepH = refDay.sleepMinutes != null ? refDay.sleepMinutes / 60 : null
+
+  const load7d = historical.slice(-7).reduce((s, d) => s + d.activityMinutes, 0)
+
+  const consecutiveEasyDays = countConsecutiveEasyDays(historical)
+  const daysSinceHard        = daysSinceHardSession(historical)
+
+  // ── Determine state ─────────────────────────────────────────────────────────
+  const readiness = determineReadiness({
+    hrvRatio,
+    sleepH,
+    load7d,
+    consecutiveEasyDays,
+    daysSinceHard,
+    checkinEnergy:   checkin?.energy   ?? null,
+    checkinSoreness: checkin?.soreness ?? null,
+  })
+
+  // ── Multi-day HRV decline damps 'push' → 'train' ──────────────────────────
+  // Even if today's snapshot is high, a declining trend caps the upside.
+  const actualReadiness: TodayReadiness = (() => {
+    if (readiness === 'push') {
+      const hrvSlope = linearSlope(historical.slice(-5).map(d => d.hrv), 3)
+      if (hrvSlope != null && baselines.hrv14d != null && hrvSlope < -0.5) {
+        return 'train'
+      }
+    }
+    return readiness
+  })()
+
+  // ── Generate copy ───────────────────────────────────────────────────────────
+  const { headline, interpretation, recommendation } = generateCopy({
+    readiness:           actualReadiness,
+    hrvRatio,
+    sleepH,
+    load7d,
+    consecutiveEasyDays,
+    daysSinceHard,
+    checkinEnergy:   checkin?.energy   ?? null,
+    checkinSoreness: checkin?.soreness ?? null,
+    hrvMs:           refDay.hrv,
+  })
+
+  // ── Supporting bullets ──────────────────────────────────────────────────────
+  const supporting: string[] = []
 
   if (hrvRatio != null) {
-    if (hrvRatio >= 1.08) {
-      readiness = 'go'
-      supporting.push(`HRV ${Math.round((hrvRatio - 1) * 100)}% above 14-day baseline`)
-    } else if (hrvRatio < 0.82) {
-      readiness = 'rest'
-      supporting.push(`HRV ${Math.round((1 - hrvRatio) * 100)}% below 14-day baseline`)
-    } else {
-      supporting.push(`HRV near baseline (${Math.round(refDay.hrv!)} ms)`)
-    }
-  }
-
-  // ── Sleep ──────────────────────────────────────────────────────────────
-  const sleepH = refDay.sleepMinutes != null ? refDay.sleepMinutes / 60 : null
-  if (sleepH != null) {
-    if (sleepH >= 7.5) {
-      if (readiness === 'moderate') readiness = 'go'
-      supporting.push(`Slept ${sleepH.toFixed(1)}h — well rested`)
-    } else if (sleepH >= 6.5) {
-      supporting.push(`Sleep ${sleepH.toFixed(1)}h — adequate`)
-    } else if (sleepH >= 5.5) {
-      if (readiness === 'go') readiness = 'moderate'
-      supporting.push(`Sleep ${sleepH.toFixed(1)}h — below target`)
-    } else {
-      readiness = readiness === 'go' ? 'moderate' : 'rest'
-      supporting.push(`Short sleep — ${sleepH.toFixed(1)}h`)
-    }
-  }
-
-  // ── Resting HR vs baseline ──────────────────────────────────────────────
-  if (
-    refDay.restingHr != null &&
-    baselines.restingHr14d != null &&
-    refDay.restingHr > baselines.restingHr14d + 6
-  ) {
-    if (readiness === 'go') readiness = 'moderate'
+    const pct = Math.round(Math.abs(1 - hrvRatio) * 100)
     supporting.push(
-      `RHR elevated — ${refDay.restingHr} vs ${Math.round(baselines.restingHr14d)} baseline`,
+      hrvRatio >= 1.05 ? `HRV ${pct}% above 14-day baseline`
+      : hrvRatio < 0.95 ? `HRV ${pct}% below 14-day baseline`
+      : `HRV near baseline (${Math.round(refDay.hrv!)} ms)`,
     )
   }
 
-  // ── Training load ───────────────────────────────────────────────────────
-  const load7d = historical.slice(-7).reduce((s, d) => s + d.activityMinutes, 0)
-  if (load7d > 420) {
-    if (readiness === 'go') readiness = 'moderate'
-    supporting.push(`High training load this week — ${Math.round(load7d)} min`)
-  } else if (load7d > 60) {
+  if (sleepH != null) {
+    supporting.push(
+      sleepH >= 7.5 ? `Slept ${sleepH.toFixed(1)}h — well rested`
+      : sleepH >= 6.5 ? `Sleep ${sleepH.toFixed(1)}h — adequate`
+      : `Sleep ${sleepH.toFixed(1)}h — below target`,
+    )
+  }
+
+  if (load7d > 60) {
     supporting.push(`${Math.round(load7d)} min training this week`)
   }
 
-  // ── Multi-day HRV decline damps 'go' to 'moderate' ─────────────────────
-  const hrvSlope = linearSlope(historical.slice(-5).map(d => d.hrv), 3)
-  if (
-    hrvSlope != null &&
-    baselines.hrv14d != null &&
-    hrvSlope < -0.5 &&
-    readiness === 'go'
-  ) {
-    readiness = 'moderate'
-  }
-
-  // ── Split interpretation + recommendation ─────────────────────────────
-  // Interpretations are clean sentences — no prefix baked in.
-  // The page handles the fallback context label separately.
-
-  const interpretations: Record<TodayReadiness, string> = {
-    go:
-      hrvRatio != null && hrvRatio >= 1.08
-        ? `HRV is ${Math.round((hrvRatio - 1) * 100)}% above your 14-day baseline.`
-        : sleepH != null && sleepH >= 7.5
-          ? `You slept ${sleepH.toFixed(1)}h and recovery looks strong.`
-          : `Recovery looks good.`,
-
-    moderate:
-      load7d > 350
-        ? `Training load has been high this week (${Math.round(load7d)} min).`
-        : sleepH != null && sleepH < 6.5
-          ? `Sleep was short at ${sleepH.toFixed(1)}h.`
-          : `Recovery is at a moderate level.`,
-
-    rest:
-      refDay.restingHr != null &&
-      baselines.restingHr14d != null &&
-      refDay.restingHr > baselines.restingHr14d + 6
-        ? `Resting HR is ${Math.round(refDay.restingHr - baselines.restingHr14d)}bpm above baseline.`
-        : hrvRatio != null && hrvRatio < 0.82
-          ? `HRV is ${Math.round((1 - hrvRatio) * 100)}% below your baseline.`
-          : `Multiple recovery markers are suppressed.`,
-  }
-
-  const recommendations: Record<TodayReadiness, string> = {
-    go:
-      load7d > 350
-        ? 'A moderate to hard session is reasonable — watch cumulative load.'
-        : 'A hard session is on the table today.',
-
-    moderate:
-      sleepH != null && sleepH < 6.5
-        ? 'Zone 2 or technique work — short sleep limits adaptation.'
-        : load7d > 350
-          ? 'Keep intensity controlled after a heavy week.'
-          : 'Moderate effort is appropriate today.',
-
-    rest: 'Prioritise rest, good nutrition, and an early bedtime tonight.',
-  }
-
   return {
-    readiness,
-    interpretation: interpretations[readiness],
-    recommendation: recommendations[readiness],
-    supporting: supporting.slice(0, 3),
+    readiness:      actualReadiness,
+    headline,
+    interpretation,
+    recommendation,
+    supporting:     supporting.slice(0, 3),
     usingFallback,
   }
 }
@@ -187,17 +359,19 @@ export function runInsightEngine(
   /** Full timeline including today, oldest-first */
   allDays: DaySummary[],
   today: string, // YYYY-MM-DD
+  checkin?: Checkin | null,
 ): InsightEngineOutput {
   const historical = allDays.filter(d => d.date < today)
   const todayData  = allDays.find(d => d.date === today) ?? null
 
   const baselines = computeBaselines(historical)
   const insights  = generateInsights(historical, todayData, baselines)
-  const status    = generateTodayStatus(todayData, historical, baselines)
+  const status    = generateTodayStatus(todayData, historical, baselines, checkin ?? null)
 
   return {
     insights,
     todayReadiness:      status.readiness,
+    todayHeadline:       status.headline,
     todayInterpretation: status.interpretation,
     todayRecommendation: status.recommendation,
     todaySupporting:     status.supporting,
