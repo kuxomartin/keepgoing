@@ -23,50 +23,14 @@ import type { HealthMetrics } from '@/types/database'
 import type { DaySummary } from '@/lib/insights/types'
 
 // ── Trend label config ────────────────────────────────────────────────────────
+// red state (significant decline) uses the brand accent — intentional signal
 
 const TREND: Record<string, { arrow: string; label: string; cls: string }> = {
-  green: { arrow: '↑', label: 'improving', cls: 'text-emerald-500 dark:text-emerald-400' },
-  amber: { arrow: '↓', label: 'declining', cls: 'text-amber-500  dark:text-amber-400'   },
-  red:   { arrow: '↓', label: 'declining', cls: 'text-rose-500   dark:text-rose-400'    },
-  blue:  { arrow: '→', label: 'stable',    cls: 'text-gray-400   dark:text-zinc-500'    },
-  gray:  { arrow: '',  label: '',          cls: ''                                       },
-}
-
-// ── Metric tile — large number, label below, trend ────────────────────────────
-
-function MetricTile({
-  label, value, unit, slug, sparkValues, higherIsBetter, showTrend = true,
-}: {
-  label: string
-  value: string
-  unit: string
-  slug: string
-  sparkValues: number[]
-  higherIsBetter: boolean
-  showTrend?: boolean
-}) {
-  const colorKey = showTrend && sparkValues.length >= 4 ? trendColor(sparkValues, higherIsBetter) : 'gray'
-  const trend    = TREND[colorKey]
-
-  return (
-    <div>
-      <div className="flex items-baseline gap-1 leading-none">
-        <span className="text-[2rem] font-black text-gray-900 dark:text-zinc-50 tabular-nums leading-none">
-          {value}
-        </span>
-        <span className="text-sm text-gray-400 dark:text-zinc-500">{unit}</span>
-      </div>
-      <div className="flex items-center gap-0.5 mt-2">
-        <span className="text-xs text-gray-400 dark:text-zinc-500">{label}</span>
-        <MetricInfo slug={slug} />
-      </div>
-      {trend.label && (
-        <span className={cn('text-xs font-medium mt-0.5 block', trend.cls)}>
-          {trend.arrow} {trend.label}
-        </span>
-      )}
-    </div>
-  )
+  green: { arrow: '↑', label: 'improving', cls: 'text-emerald-500 dark:text-emerald-400'  },
+  amber: { arrow: '↓', label: 'declining', cls: 'text-amber-500 dark:text-amber-400'      },
+  red:   { arrow: '↓', label: 'declining', cls: 'text-[#E5173F]'                          },
+  blue:  { arrow: '→', label: 'stable',    cls: 'text-gray-400 dark:text-zinc-500'        },
+  gray:  { arrow: '',  label: '',          cls: ''                                         },
 }
 
 // ── Data assembly ─────────────────────────────────────────────────────────────
@@ -102,7 +66,6 @@ export default async function TodayPage() {
   const d30ago   = format(subDays(startOfDay(new Date()), 29), 'yyyy-MM-dd')
   const d14ago   = format(subDays(startOfDay(new Date()), 13), 'yyyy-MM-dd')
 
-  // 8 parallel fetches
   const [
     { data: metricsRaw },
     { data: foodRaw },
@@ -173,7 +136,7 @@ export default async function TodayPage() {
   }
 
   // ── 30-day timeline ───────────────────────────────────────────────────────
-  const dateRange = Array.from({ length: 30 }, (_, i) =>
+  const dateRange  = Array.from({ length: 30 }, (_, i) =>
     format(subDays(startOfDay(new Date()), 29 - i), 'yyyy-MM-dd')
   )
   const allDays    = buildDaySummaries(dateRange, metricsByDate, foodByDate, weightByDate, actMins)
@@ -215,7 +178,6 @@ export default async function TodayPage() {
     hasCoffeeSensitivity: personalContext.hasCoffeeSensitivity,
   })
   const foodObsInsights = generateFoodObservationInsights({ duckFound, eveningFruitFound })
-  // Merged insights available for future use — not rendered in this pass
   const _allInsights    = [...foodObsInsights, ...coffeeInsights, ...engine.insights].slice(0, 5)
 
   const trendItems   = computeTrendItems(historical)
@@ -232,21 +194,25 @@ export default async function TodayPage() {
       ? fallbackRecovery.sleepMinutes / 60
       : null
 
-  const widgetHrv    = realMetrics?.hrv_ms     ?? fallbackRecovery?.hrv      ?? null
+  const widgetHrv    = realMetrics?.hrv_ms ?? fallbackRecovery?.hrv ?? null
   const widgetWeight = latestWeightReal?.weight_kg ?? null
 
-  // ── 7-day sparklines for metric tiles ────────────────────────────────────
+  // ── 7-day sparklines ──────────────────────────────────────────────────────
   const last7      = historical.slice(-7)
   const sleepSpark = last7.map(d => d.sleepMinutes).filter((v): v is number => v != null).map(m => m / 60)
   const hrvSpark   = last7.map(d => d.hrv).filter((v): v is number => v != null)
 
-  // ── Calorie baseline for yesterday context ────────────────────────────────
+  // Pre-compute trend keys for metric display
+  const hrvTrendKey   = hrvSpark.length >= 4   ? trendColor(hrvSpark,   true) : 'gray'
+  const sleepTrendKey = sleepSpark.length >= 4 ? trendColor(sleepSpark, true) : 'gray'
+
+  // ── Calorie baseline ──────────────────────────────────────────────────────
   const calBase7d = (() => {
     const vals = historical.slice(-7).map(d => d.calories).filter((v): v is number => v != null && v > 400)
     return vals.length >= 3 ? vals.reduce((a, b) => a + b, 0) / vals.length : null
   })()
 
-  // ── Daily recommendation (kept for future use) ────────────────────────────
+  // ── Daily recommendation ──────────────────────────────────────────────────
   const baselines = computeBaselines(historical)
   const bikeRides = (activitiesRaw ?? [])
     .filter((r): r is typeof r & { activity_type: string } => r.activity_type === 'ride')
@@ -273,35 +239,31 @@ export default async function TodayPage() {
     personalContext,
   })
 
-  // ── Derived flags ─────────────────────────────────────────────────────────
   const hasLogged = consumed != null || proteinToday != null || activityMinutes > 0 || coffeeCups > 0
-
-  // Count visible metric tiles for grid columns
-  const metricCount = [widgetHrv != null, widgetSleepH != null, widgetWeight != null].filter(Boolean).length
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div>
 
       {/* ── DATE ─────────────────────────────────────────────────────────── */}
-      <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-8">
+      <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-10">
         {longDate}
       </p>
 
       {/* ── BRIEFING ─────────────────────────────────────────────────────── */}
 
-      {/* 1. Headline — the hero */}
-      <h1 className="text-4xl font-bold text-gray-900 dark:text-zinc-50 leading-tight tracking-tight mb-3">
+      {/* 1. Headline — the hero. Typography does the work. */}
+      <h1 className="text-4xl font-bold text-gray-900 dark:text-zinc-50 leading-tight tracking-tight mb-5">
         {engine.todayHeadline}
       </h1>
 
       {/* 2. Interpretation — the why */}
-      <p className="text-base text-gray-500 dark:text-zinc-400 leading-relaxed mb-4">
+      <p className="text-base text-gray-500 dark:text-zinc-400 leading-relaxed mb-5">
         {engine.todayInterpretation}
       </p>
 
-      {/* 3. Recommendation — no decorative arrow */}
-      <div className="mb-6 space-y-2">
+      {/* 3. Recommendation */}
+      <div className="mb-8 space-y-2">
         <p className="text-base font-semibold text-gray-800 dark:text-zinc-200 leading-relaxed">
           {engine.todayRecommendation}
         </p>
@@ -312,56 +274,79 @@ export default async function TodayPage() {
         )}
       </div>
 
-      {/* ── MORNING CHECK-IN — time-sensitive, shown early ───────────────── */}
+      {/* ── MORNING CHECK-IN ─────────────────────────────────────────────── */}
       <DailyCheckinForm existingCheckin={checkinData} />
 
-      {/* ── METRICS — HRV · Sleep · Weight as instrument tiles ───────────── */}
-      {metricCount > 0 && (
-        <div className="border-t border-gray-100 dark:border-zinc-800 pt-6 mb-8 mt-6">
-          <div className={cn(
-            'grid gap-6',
-            metricCount === 3 ? 'grid-cols-3' :
-            metricCount === 2 ? 'grid-cols-2' : 'grid-cols-1'
-          )}>
-            {widgetHrv != null && (
-              <MetricTile
-                label="HRV"
-                value={String(Math.round(Number(widgetHrv)))}
-                unit="ms"
-                slug="hrv"
-                sparkValues={hrvSpark}
-                higherIsBetter={true}
-              />
-            )}
-            {widgetSleepH != null && (
-              <MetricTile
-                label="Sleep"
-                value={widgetSleepH.toFixed(1)}
-                unit="h"
-                slug="sleep"
-                sparkValues={sleepSpark}
-                higherIsBetter={true}
-              />
-            )}
-            {widgetWeight != null && (
-              <MetricTile
-                label="Weight"
-                value={widgetWeight.toFixed(1)}
-                unit="kg"
-                slug="weight"
-                sparkValues={[]}
-                higherIsBetter={false}
-                showTrend={false}
-              />
-            )}
-          </div>
+      {/* ── METRICS — hierarchical instrument panel ───────────────────────── */}
+      {(widgetHrv != null || widgetSleepH != null || widgetWeight != null) && (
+        <div className="border-t border-gray-200 dark:border-zinc-800 pt-6 mt-8 mb-8">
+
+          {/* HRV — primary signal, full row, 6xl */}
+          {widgetHrv != null && (
+            <div className="mb-7">
+              <div className="flex items-baseline gap-2">
+                <span className="text-6xl font-black text-gray-900 dark:text-zinc-50 tabular-nums leading-none">
+                  {String(Math.round(Number(widgetHrv)))}
+                </span>
+                <span className="text-base text-gray-400 dark:text-zinc-500">ms</span>
+              </div>
+              <div className="flex items-center gap-2 mt-2.5">
+                <span className="text-xs text-gray-400 dark:text-zinc-500">HRV</span>
+                <MetricInfo slug="hrv" />
+                {TREND[hrvTrendKey].label && (
+                  <span className={cn('text-xs font-medium', TREND[hrvTrendKey].cls)}>
+                    {TREND[hrvTrendKey].arrow} {TREND[hrvTrendKey].label}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Sleep + Weight — secondary, side by side, 4xl */}
+          {(widgetSleepH != null || widgetWeight != null) && (
+            <div className="grid grid-cols-2 gap-8">
+              {widgetSleepH != null && (
+                <div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-4xl font-bold text-gray-900 dark:text-zinc-50 tabular-nums leading-none">
+                      {widgetSleepH.toFixed(1)}
+                    </span>
+                    <span className="text-sm text-gray-400 dark:text-zinc-500">h</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <span className="text-xs text-gray-400 dark:text-zinc-500">Sleep</span>
+                    <MetricInfo slug="sleep" />
+                    {TREND[sleepTrendKey].label && (
+                      <span className={cn('text-xs font-medium', TREND[sleepTrendKey].cls)}>
+                        {TREND[sleepTrendKey].arrow} {TREND[sleepTrendKey].label}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {widgetWeight != null && (
+                <div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-4xl font-bold text-gray-900 dark:text-zinc-50 tabular-nums leading-none">
+                      {widgetWeight.toFixed(1)}
+                    </span>
+                    <span className="text-sm text-gray-400 dark:text-zinc-500">kg</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <span className="text-xs text-gray-400 dark:text-zinc-500">Weight</span>
+                    <MetricInfo slug="weight" />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {/* ── TODAY LOGGED ─────────────────────────────────────────────────── */}
       {hasLogged && (
         <div className="mb-7">
-          <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-2">
+          <p className="text-[10px] font-bold text-gray-400 dark:text-zinc-500 uppercase tracking-widest mb-2.5">
             Today logged
           </p>
           <div className="space-y-1 text-sm text-gray-600 dark:text-zinc-400">
@@ -400,12 +385,12 @@ export default async function TodayPage() {
       )}
 
       {/* ── YESTERDAY ────────────────────────────────────────────────────── */}
-      <div className="border-t border-gray-100 dark:border-zinc-800 pt-5 mb-6">
+      <div className="border-t border-gray-200 dark:border-zinc-800 pt-5 mb-6">
         <YesterdayWidget yday={yday} calBase7d={calBase7d} />
       </div>
 
       {/* ── RECENT TREND ─────────────────────────────────────────────────── */}
-      <div className="border-t border-gray-100 dark:border-zinc-800 pt-5 mb-8">
+      <div className="border-t border-gray-200 dark:border-zinc-800 pt-5 mb-8">
         <TrendWidget
           items={trendItems}
           interpretation={trendSummary.interpretation}
@@ -414,7 +399,7 @@ export default async function TodayPage() {
       </div>
 
       {/* ── QUICK ACTIONS ────────────────────────────────────────────────── */}
-      <div className="border-t border-gray-100 dark:border-zinc-800 pt-5 space-y-4">
+      <div className="border-t border-gray-200 dark:border-zinc-800 pt-5 space-y-4">
         <QuickActionsPanel />
         <div className="hidden lg:grid grid-cols-3 gap-4">
           <QuickAddFood />
