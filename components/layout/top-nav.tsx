@@ -30,15 +30,15 @@ export function TopNav() {
   }
 
   return (
-    <header className="hidden lg:flex fixed top-0 left-0 right-0 h-16 z-30 bg-white dark:bg-zinc-950 border-b border-[#D9D9D9] dark:border-zinc-800 items-center px-6">
+    <header className="hidden lg:flex fixed top-0 left-0 right-0 h-14 z-30 bg-[#0D0D0D] border-b border-white/[0.08] items-center px-6">
       {/* Logo */}
       <Link
         href="/today"
-        className="flex items-center gap-2.5 flex-shrink-0 mr-6 hover:opacity-75 transition-opacity"
+        className="flex items-center gap-2.5 flex-shrink-0 mr-6 hover:opacity-70 transition-opacity"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="KeepGoing" width={28} height={28} className="rounded-sm" />
-        <span className="text-[11px] font-bold text-[#0D0D0D] dark:text-zinc-50 uppercase tracking-[0.1em]">
+        <img src="/logo.png" alt="KeepGoing" width={26} height={26} className="rounded-sm" />
+        <span className="text-[11px] font-bold text-white uppercase tracking-[0.1em]">
           KeepGoing
         </span>
       </Link>
@@ -52,10 +52,10 @@ export function TopNav() {
               key={href}
               href={href}
               className={cn(
-                'px-2.5 h-16 flex items-center text-[13px] font-medium transition-colors whitespace-nowrap border-b-2 -mb-px',
+                'px-3 h-14 flex items-center text-[13px] font-medium transition-colors whitespace-nowrap border-b-2 -mb-px',
                 active
                   ? 'text-[#E5173F] border-[#E5173F]'
-                  : 'text-[#888888] dark:text-zinc-500 border-transparent hover:text-[#0D0D0D] dark:hover:text-zinc-200',
+                  : 'text-white/35 border-transparent hover:text-white/70',
               )}
             >
               {label}
@@ -67,7 +67,7 @@ export function TopNav() {
       {/* Sign out */}
       <button
         onClick={handleSignOut}
-        className="flex-shrink-0 ml-4 text-[12px] font-medium text-[#888888] hover:text-[#0D0D0D] dark:hover:text-zinc-200 transition-colors"
+        className="flex-shrink-0 ml-4 text-[12px] font-medium text-white/25 hover:text-white/60 transition-colors"
       >
         Sign out
       </button>

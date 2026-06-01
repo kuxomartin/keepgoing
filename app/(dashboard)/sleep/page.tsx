@@ -215,14 +215,20 @@ export default async function SleepPage() {
           {cause && latest && (
             <div className="border-t border-white/[0.06] pb-12 pt-10">
               <Container>
-                {/* Section header */}
-                <div className="mb-8">
-                  <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-1">
+                {/* Section header — second most important element after hero */}
+                <div className="mb-10">
+                  <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-3">
                     Sleep Cause Explorer
                   </p>
-                  <p className="text-sm text-white/40 max-w-lg">
+                  <h2
+                    className="font-display font-bold text-white mb-2"
+                    style={{ fontSize: 'clamp(1.5rem, 2.5vw, 2.25rem)', letterSpacing: '-0.025em', lineHeight: 1.1 }}
+                  >
+                    What may have affected your sleep.
+                  </h2>
+                  <p className="text-sm text-white/35 mt-2">
                     {cause.contributors.length > 0
-                      ? 'What may have influenced last night\'s sleep. These are patterns, not diagnoses.'
+                      ? 'Patterns from yesterday\'s logs. Not a diagnosis.'
                       : 'Not enough prior-day data. Log coffee, food, and activities for better analysis.'}
                   </p>
                 </div>
@@ -290,6 +296,76 @@ export default async function SleepPage() {
                   inBed={latest.in_bed_minutes}
                   asleep={latest.asleep_minutes}
                 />
+
+                {/* Reference ranges — compact, cautious language */}
+                {(() => {
+                  const archTotal = (latest.deep_minutes ?? 0) + (latest.core_minutes ?? 0) +
+                    (latest.rem_minutes ?? 0) + (latest.awake_minutes ?? 0)
+                  if (!archTotal) return null
+
+                  const pct = (m: number | null) => m ? Math.round((m / archTotal) * 100) : null
+
+                  const stages = [
+                    {
+                      label: 'Deep',
+                      minutes: latest.deep_minutes,
+                      pct: pct(latest.deep_minutes),
+                      ref: '~10–20%',
+                      assess: (p: number) => p < 10 ? 'low-normal' : p <= 20 ? 'typical' : 'above typical',
+                    },
+                    {
+                      label: 'REM',
+                      minutes: latest.rem_minutes,
+                      pct: pct(latest.rem_minutes),
+                      ref: '~20–25%',
+                      assess: (p: number) => p < 15 ? 'below typical' : p < 20 ? 'slightly below' : p <= 25 ? 'typical' : p <= 30 ? 'slightly above' : 'above typical',
+                    },
+                    {
+                      label: 'Core',
+                      minutes: latest.core_minutes,
+                      pct: pct(latest.core_minutes),
+                      ref: 'majority',
+                      assess: (p: number) => p >= 40 ? 'typical (largest stage)' : 'lower than typical',
+                    },
+                    {
+                      label: 'Awake',
+                      minutes: latest.awake_minutes,
+                      pct: pct(latest.awake_minutes),
+                      ref: 'lower is better',
+                      assess: (p: number) => p < 5 ? 'low — good' : p < 10 ? 'typical' : 'elevated',
+                    },
+                  ].filter(s => s.minutes != null && s.minutes > 0)
+
+                  return (
+                    <div className="mt-8 border-t border-white/[0.06] pt-6">
+                      <p className="text-[10px] font-semibold text-white/20 uppercase tracking-[0.18em] mb-4">
+                        Stage breakdown · typical adult ranges
+                      </p>
+                      <div className="space-y-2">
+                        {stages.map(s => {
+                          const assessment = s.pct != null ? s.assess(s.pct) : null
+                          const isNote = assessment && (assessment.includes('below') || assessment.includes('elevated') || assessment.includes('above'))
+                          return (
+                            <div key={s.label} className="flex items-baseline gap-3 text-sm">
+                              <span className="text-white/40 w-12 flex-shrink-0">{s.label}</span>
+                              <span className="font-mono text-white/70 w-16 flex-shrink-0">{s.minutes ? formatMinutes(s.minutes) : '—'}</span>
+                              <span className="text-white/30 w-8 flex-shrink-0 tabular-nums">{s.pct != null ? `${s.pct}%` : ''}</span>
+                              <span className="text-white/20 text-xs w-24 flex-shrink-0">{s.ref}</span>
+                              {assessment && (
+                                <span className={isNote ? 'text-[#FFB000] text-xs' : 'text-white/25 text-xs'}>
+                                  {assessment}
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <p className="text-[10px] text-white/15 mt-4">
+                        Apple Watch sleep stage estimates are approximate. Typical ranges vary by age and individual.
+                      </p>
+                    </div>
+                  )
+                })()}
               </Container>
             </div>
           )}
@@ -406,42 +482,42 @@ export default async function SleepPage() {
           </div>
 
           {/* ══ ZONE 5 — Patterns (only show real findings) + Experiments ════════ */}
-          <div className="bg-white dark:bg-zinc-950">
+          <div className="bg-[#0D0D0D]">
             <Container className="py-12 space-y-12">
 
-              {/* Patterns — hide if nothing meaningful */}
+              {/* Patterns — only shown when a real finding exists */}
               {patternText && (
                 <div>
-                  <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.15em] mb-4">
-                    What Seems to Affect Your Sleep
+                  <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-4">
+                    Pattern Detected
                   </p>
                   <div className="border-l-2 border-[#E5173F] pl-5">
-                    <p className="text-sm text-[#0D0D0D] dark:text-zinc-200 leading-relaxed">{patternText}</p>
-                    <p className="text-xs text-[#888888] mt-2">Association only — not causal.</p>
+                    <p className="text-sm text-white/70 leading-relaxed">{patternText}</p>
+                    <p className="text-xs text-white/25 mt-2">Association only — not causal.</p>
                   </div>
                 </div>
               )}
 
               {/* Experiments */}
               <div>
-                <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.15em] mb-4">
+                <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-2">
                   Experiments to Try
                 </p>
-                <p className="text-xs text-[#888888] mb-6">One at a time. 7–10 days each.</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <p className="text-xs text-white/25 mb-6">One at a time. 7–10 days each for a clean signal.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {[
-                    { title: 'Caffeine cutoff 13:00', d: '10 days', desc: 'No caffeine after 13:00. Compare sleep duration and efficiency.' },
-                    { title: 'Dinner before 19:30',    d: '7 days',  desc: 'Finish eating earlier. Observe effect on efficiency and wake count.' },
-                    { title: 'Fixed bedtime ±30 min',  d: '7 days',  desc: 'Same bedtime every night. Circadian consistency.' },
-                    { title: 'Zone 2 after hard days', d: '2 weeks', desc: 'Light 30-40 min activity instead of full rest.' },
-                    { title: 'Reduce deficit on training days', d: '10 days', desc: 'Keep calorie deficit under 400–500 kcal on heavy days.' },
+                    { title: 'Caffeine cutoff 13:00',          d: '10 days', desc: 'No caffeine after 13:00. Compare sleep duration and efficiency.' },
+                    { title: 'Dinner before 19:30',             d: '7 days',  desc: 'Finish eating earlier. Observe effect on efficiency and wake count.' },
+                    { title: 'Fixed bedtime ±30 min',           d: '7 days',  desc: 'Same bedtime every night. Circadian consistency reduces fragmentation.' },
+                    { title: 'Zone 2 after hard days',          d: '2 weeks', desc: 'Light 30–40 min activity instead of full rest. Observe next-day HRV.' },
+                    { title: 'Reduce deficit on training days', d: '10 days', desc: 'Keep calorie deficit under 400–500 kcal on heavy training days.' },
                   ].map(exp => (
-                    <div key={exp.title} className="border border-[#D9D9D9] dark:border-zinc-800 px-5 py-4">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h4 className="text-sm font-semibold text-[#0D0D0D] dark:text-zinc-200 leading-tight">{exp.title}</h4>
-                        <span className="text-[10px] text-[#888888] uppercase tracking-widest flex-shrink-0">{exp.d}</span>
+                    <div key={exp.title} className="bg-[#141414] border border-white/[0.06] px-5 py-4">
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <h4 className="text-sm font-semibold text-white leading-tight">{exp.title}</h4>
+                        <span className="text-[10px] text-white/25 uppercase tracking-widest flex-shrink-0 mt-0.5">{exp.d}</span>
                       </div>
-                      <p className="text-xs text-[#888888] leading-relaxed">{exp.desc}</p>
+                      <p className="text-xs text-white/40 leading-relaxed">{exp.desc}</p>
                     </div>
                   ))}
                 </div>
