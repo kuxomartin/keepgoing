@@ -6,17 +6,14 @@ import {
 } from 'recharts'
 import { format, parseISO } from 'date-fns'
 
-interface DataPoint {
-  date: string
-  value: number | null
-}
+interface DataPoint { date: string; value: number | null }
 
 interface Props {
   data: DataPoint[]
   unit?: string
-  goodThreshold?: number   // above = good (green)
-  badThreshold?: number    // below = bad (red)
+  goodThreshold?: number
   higherIsBetter?: boolean
+  chartHeight?: number
 }
 
 const CustomTooltip = ({ active, payload, label, unit }: {
@@ -26,7 +23,7 @@ const CustomTooltip = ({ active, payload, label, unit }: {
   const val = payload[0].value
   if (val == null) return null
   return (
-    <div className="bg-[#0D0D0D] text-white text-xs px-2.5 py-1.5 rounded-sm">
+    <div className="bg-[#0D0D0D] border border-white/10 text-xs px-2.5 py-1.5 rounded-sm">
       <span className="text-white/50">{label} · </span>
       {Math.round(val)}{unit}
     </div>
@@ -34,10 +31,17 @@ const CustomTooltip = ({ active, payload, label, unit }: {
 }
 
 export function SleepEfficiencyChart({
-  data, unit = '%', goodThreshold = 85, higherIsBetter = true,
+  data, unit = '%', goodThreshold = 85, higherIsBetter = true, chartHeight = 200,
 }: Props) {
   const hasData = data.some(d => d.value != null)
   if (!hasData) return <p className="text-sm text-[#888888] py-4">No data</p>
+
+  const nonNull = data.filter(d => d.value != null).map(d => d.value!)
+  const minVal  = Math.min(...nonNull)
+  const maxVal  = Math.max(...nonNull)
+  // Pad domain so bars aren't at the very edge
+  const domainMin = Math.max(0, Math.floor(minVal * 0.95))
+  const domainMax = Math.ceil(maxVal * 1.02)
 
   const chartData = data.map(d => ({
     label: d.date ? format(parseISO(d.date), 'dd MMM') : d.date,
@@ -45,8 +49,8 @@ export function SleepEfficiencyChart({
   }))
 
   return (
-    <ResponsiveContainer width="100%" height={120}>
-      <BarChart data={chartData} barCategoryGap="30%" margin={{ top: 4, right: 0, left: -28, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={chartHeight}>
+      <BarChart data={chartData} barCategoryGap="30%" margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
         <XAxis
           dataKey="label"
           tick={{ fontSize: 10, fill: '#888888' }}
@@ -55,10 +59,13 @@ export function SleepEfficiencyChart({
           interval="preserveStartEnd"
         />
         <YAxis
+          domain={[domainMin, domainMax]}
           tick={{ fontSize: 10, fill: '#888888' }}
           tickLine={false}
           axisLine={false}
-          tickFormatter={v => `${v}${unit}`}
+          tickFormatter={v => `${Math.round(v)}${unit}`}
+          tickCount={4}
+          width={38}
         />
         <Tooltip content={(props) => (
           <CustomTooltip
@@ -68,18 +75,21 @@ export function SleepEfficiencyChart({
             unit={unit}
           />
         )} />
-        {goodThreshold && (
-          <ReferenceLine y={goodThreshold} stroke="#888888" strokeDasharray="3 3" strokeWidth={1} />
+        {goodThreshold >= domainMin && goodThreshold <= domainMax && (
+          <ReferenceLine y={goodThreshold} stroke="#D9D9D9" strokeDasharray="3 3" strokeWidth={1} />
         )}
         <Bar dataKey="value" radius={[2, 2, 0, 0]}>
           {chartData.map((entry, i) => {
             const v = entry.value
-            // Warm monochrome palette
             const color = v == null
               ? 'transparent'
               : higherIsBetter
-                ? v >= goodThreshold ? '#5C4A3A' : v >= goodThreshold - 10 ? '#C4892A' : '#E5173F'
-                : v <= goodThreshold ? '#5C4A3A' : v <= goodThreshold + 3  ? '#C4892A' : '#E5173F'
+                ? v >= goodThreshold       ? '#0D0D0D'
+                  : v >= goodThreshold - 10 ? '#FFB000'
+                  :                          '#E5173F'
+                : v <= goodThreshold       ? '#0D0D0D'
+                  : v <= goodThreshold + 3  ? '#FFB000'
+                  :                          '#E5173F'
             return <Cell key={i} fill={color} />
           })}
         </Bar>

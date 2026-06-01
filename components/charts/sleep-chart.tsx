@@ -1,15 +1,8 @@
 'use client'
 
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-  Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts'
 import { format, parseISO } from 'date-fns'
 
@@ -18,11 +11,11 @@ export interface SleepChartPoint {
   hours: number | null
 }
 
-// Warm monochrome — no blue/amber/Apple Health colors
+// Black / amber / red — no brown, no blue
 function barColor(hours: number) {
-  if (hours >= 7) return '#5C4A3A'  // warm brown — adequate/good
-  if (hours >= 6) return '#C4892A'  // muted ochre — caution
-  return '#E5173F'                  // signal red — short
+  if (hours >= 7) return '#0D0D0D'   // black — solid
+  if (hours >= 6) return '#FFB000'   // amber — caution
+  return '#E5173F'                   // red — short
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,33 +24,41 @@ function CustomTooltip({ active, payload, label }: any) {
   const hours = payload[0].value
   if (hours == null) return null
   return (
-    <div className="bg-white border border-[#D9D9D9] px-3 py-2 text-xs">
-      <p className="font-medium text-[#0D0D0D]">{label ? format(parseISO(label), 'EEE d MMM') : ''}</p>
-      <p className="text-[#888888]">{Number(hours).toFixed(1)}h sleep</p>
+    <div className="bg-[#0D0D0D] border border-white/10 px-3 py-2 text-xs">
+      <p className="font-medium text-white">{label ? format(parseISO(label), 'EEE d MMM') : ''}</p>
+      <p className="text-white/50">{Number(hours).toFixed(1)}h sleep</p>
     </div>
   )
 }
 
-export function SleepChart({ data, maxHours = 10, fixedColor }: { data: SleepChartPoint[]; maxHours?: number; fixedColor?: string }) {
-  // Only show days with actual data
+export function SleepChart({
+  data,
+  maxHours = 10,
+  fixedColor,
+  chartHeight = 200,
+}: {
+  data: SleepChartPoint[]
+  maxHours?: number
+  fixedColor?: string
+  chartHeight?: number
+}) {
   const hasData = data.some(d => d.hours != null && d.hours > 0)
 
   if (!hasData) {
     return (
-      <div className="h-40 flex items-center justify-center text-sm text-[#888888]">
+      <div className="flex items-center justify-center text-sm text-[#888888]" style={{ height: chartHeight }}>
         No recent sleep data
       </div>
     )
   }
 
-  // Replace null/0 with undefined so Recharts skips the bar
   const chartData = data.map(d => ({
     date: d.date,
     hours: d.hours && d.hours > 0 ? d.hours : undefined,
   }))
 
   return (
-    <ResponsiveContainer width="100%" height={180}>
+    <ResponsiveContainer width="100%" height={chartHeight}>
       <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#D9D9D9" vertical={false} />
         <XAxis
@@ -79,9 +80,12 @@ export function SleepChart({ data, maxHours = 10, fixedColor }: { data: SleepCha
         />
         {maxHours > 2 && <ReferenceLine y={7} stroke="#D9D9D9" strokeDasharray="4 4" strokeWidth={1.5} />}
         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
-        <Bar dataKey="hours" radius={[3, 3, 0, 0]}>
+        <Bar dataKey="hours" radius={[2, 2, 0, 0]}>
           {chartData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={entry.hours ? (fixedColor ?? barColor(entry.hours)) : 'transparent'} />
+            <Cell
+              key={`cell-${index}`}
+              fill={entry.hours ? (fixedColor ?? barColor(entry.hours)) : 'transparent'}
+            />
           ))}
         </Bar>
       </BarChart>

@@ -15,13 +15,13 @@ const CustomTooltip = ({ active, payload, label }: {
   const val = payload[0].value
   if (val == null) return null
   return (
-    <div className="bg-[#0D0D0D] text-white text-xs px-2.5 py-1.5 rounded-sm">
+    <div className="bg-[#0D0D0D] border border-white/10 text-xs px-2.5 py-1.5 rounded-sm">
       <span className="text-white/50">{label} · </span>{val} wakes
     </div>
   )
 }
 
-export function WakeCountChart({ data }: { data: DataPoint[] }) {
+export function WakeCountChart({ data, chartHeight = 200 }: { data: DataPoint[]; chartHeight?: number }) {
   const hasData = data.some(d => d.value != null)
   if (!hasData) return <p className="text-sm text-[#888888] py-4">No data</p>
 
@@ -31,7 +31,7 @@ export function WakeCountChart({ data }: { data: DataPoint[] }) {
   }))
 
   return (
-    <ResponsiveContainer width="100%" height={120}>
+    <ResponsiveContainer width="100%" height={chartHeight}>
       <BarChart data={chartData} barCategoryGap="30%" margin={{ top: 4, right: 0, left: -28, bottom: 0 }}>
         <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#888888' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
         <YAxis tick={{ fontSize: 10, fill: '#888888' }} tickLine={false} axisLine={false} allowDecimals={false} />
@@ -45,8 +45,8 @@ export function WakeCountChart({ data }: { data: DataPoint[] }) {
         <Bar dataKey="value" radius={[2, 2, 0, 0]}>
           {chartData.map((entry, i) => {
             const v = entry.value
-            // Warm monochrome — lower wake count is better
-            const color = v == null ? 'transparent' : v <= 5 ? '#5C4A3A' : v <= 10 ? '#C4892A' : '#E5173F'
+            // Lower is better. Apple Watch counts micro-arousals — 7-12 is typical.
+            const color = v == null ? 'transparent' : v <= 7 ? '#0D0D0D' : v <= 12 ? '#FFB000' : '#E5173F'
             return <Cell key={i} fill={color} />
           })}
         </Bar>

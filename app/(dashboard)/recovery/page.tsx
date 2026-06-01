@@ -303,8 +303,8 @@ export default async function RecoveryPage() {
               </div>
             </div>
             <div className="flex items-center gap-3 text-[10px] text-[#888888] flex-shrink-0 ml-4">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{background:'#5C4A3A'}} /> ≥7h</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{background:'#C4892A'}} /> 6–7h</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{background:'#0D0D0D'}} /> ≥7h</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{background:'#FFB000'}} /> 6–7h</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{background:'#E5173F'}} /> &lt;6h</span>
             </div>
           </div>
