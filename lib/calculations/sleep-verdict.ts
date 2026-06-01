@@ -55,17 +55,18 @@ export function getSleepVerdict(record: SleepRecord | null): SleepVerdict {
   // Only mark disrupted on efficiency <75% OR awake time >60 min.
   if ((eff != null && eff < 75) || (awake != null && awake > 60)) {
     key = 'disrupted'
-  } else if (h >= 7.5 && wakes != null && wakes > 12) {
-    key = 'long_fragmented'
   } else if (h < 6 && eff != null && eff >= 85) {
     key = 'short_efficient'
   } else if (h < 6) {
     key = 'short'
-  } else if (eff != null && eff >= 90 && (wakes == null || wakes <= 3)) {
+  } else if (eff != null && eff >= 90) {
+    // High efficiency — ignore wake_count (Apple Watch micro-arousals are noisy)
     if (h >= 7) key = 'solid'
     else key = 'efficient'
-  } else if (h >= 7 && (wakes == null || wakes <= 4) && (eff == null || eff >= 80)) {
+  } else if (h >= 7 && (eff == null || eff >= 80)) {
     key = 'solid'
+  } else if (h >= 7.5 && eff != null && eff < 80) {
+    key = 'long_fragmented'
   }
 
   const VERDICT_TEXT: Record<SleepVerdictKey, string> = {
