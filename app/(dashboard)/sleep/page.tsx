@@ -349,7 +349,7 @@ export default async function SleepPage() {
                     <span>14d avg: <span className="font-semibold text-[#0D0D0D] dark:text-zinc-200">{avg14Deep}h</span></span>
                   )}
                 </div>
-                <SleepChart data={deepData} maxHours={2} />
+                <SleepChart data={deepData} maxHours={2} fixedColor="#8C7B70" />
               </div>
             )}
 

@@ -38,7 +38,7 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
-export function SleepChart({ data, maxHours = 10 }: { data: SleepChartPoint[]; maxHours?: number }) {
+export function SleepChart({ data, maxHours = 10, fixedColor }: { data: SleepChartPoint[]; maxHours?: number; fixedColor?: string }) {
   // Only show days with actual data
   const hasData = data.some(d => d.hours != null && d.hours > 0)
 
@@ -81,7 +81,7 @@ export function SleepChart({ data, maxHours = 10 }: { data: SleepChartPoint[]; m
         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
         <Bar dataKey="hours" radius={[3, 3, 0, 0]}>
           {chartData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={entry.hours ? barColor(entry.hours) : 'transparent'} />
+            <Cell key={`cell-${index}`} fill={entry.hours ? (fixedColor ?? barColor(entry.hours)) : 'transparent'} />
           ))}
         </Bar>
       </BarChart>
