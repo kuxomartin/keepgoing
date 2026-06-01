@@ -290,7 +290,9 @@ export function getSleepContextSentence(record: SleepRecord | null): string | nu
   const eff  = record.efficiency_pct
   const wakes = record.wake_count
 
-  if ((wakes != null && wakes > 6) || (eff != null && eff < 75)) {
+  // Apple Watch wake_count = micro-arousals; use efficiency + awake time only
+  const awake = record.awake_minutes
+  if ((eff != null && eff < 75) || (awake != null && awake > 60)) {
     return 'Sleep was disrupted — treat recovery signal with some caution.'
   }
   if (h < 5.5) {
