@@ -4,23 +4,61 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --font-sans: var(--font-inter);
+  --font-sans:    var(--font-inter);
+  --font-display: var(--font-display);
 }
 
-/* ── Design token overrides ────────────────────────────────────────────────── */
+/* Display font — used exclusively for verdict headlines, recovery headlines, major numbers */
+.font-display {
+  font-family: var(--font-display), var(--font-inter), system-ui, sans-serif;
+}
+
+/* ── Design tokens — V3 ────────────────────────────────────────────────────── */
 :root {
-  /* Status — data only, not decoration */
+  /* Base */
+  --color-text-primary:    #0D0D0D;
+  --color-text-secondary:  #888888;
+  --color-divider:         #D9D9D9;
+
+  /* Signal — sacred, not decorative */
+  --color-signal-red:      #E5173F;
+  --color-signal-green:    #16A34A;
+  --color-signal-amber:    #D97706;
+
+  /* Surfaces — semantic zones, not arbitrary backgrounds */
+  --surface-white:         #FFFFFF;
+  --surface-stone:         #F2EDE6;   /* warm, context zones */
+  --surface-graphite:      #EDEDEB;   /* cool, secondary data */
+  --surface-sand:          #EDE8E0;   /* muted warm, insight blocks */
+  --surface-titanium:      #E8E8E6;   /* muted cool, historical */
+  --surface-control-room:  #0D0D0D;   /* dark hero, Recovery flagship */
+
+  /* Status data colors */
   --status-green:  #10b981;
   --status-amber:  #f59e0b;
   --status-red:    #f43f5e;
-  --status-blue:   #3b82f6;
 
-  /* Accent — Nothing-inspired, used sparingly */
-  --color-accent:  #E5173F;
+  /* Legacy aliases — keep for backward compat during transition */
+  --color-accent:     #E5173F;
+  --color-near-black: #0D0D0D;
+  --color-mid-gray:   #888888;
+}
 
-  /* Base palette */
-  --color-near-black: #111111;
-  --color-mid-gray:   #666666;
+/* ── Surface zone utilities ────────────────────────────────────────────────── */
+/* Use these instead of arbitrary bg-gray-* for semantic surfaces */
+.surface-white     { background-color: var(--surface-white); }
+.surface-stone     { background-color: var(--surface-stone); }
+.surface-graphite  { background-color: var(--surface-graphite); }
+.surface-sand      { background-color: var(--surface-sand); }
+.surface-titanium  { background-color: var(--surface-titanium); }
+.surface-control   { background-color: var(--surface-control-room); }
+
+/* Negative margin bleed — for full-width surface sections inside constrained layout */
+.bleed-full {
+  margin-left: calc(-1 * var(--bleed, 1.5rem));
+  margin-right: calc(-1 * var(--bleed, 1.5rem));
+  padding-left: var(--bleed, 1.5rem);
+  padding-right: var(--bleed, 1.5rem);
 }
 
 /* ── Safe area utilities (iOS) ─────────────────────────────────────────────── */

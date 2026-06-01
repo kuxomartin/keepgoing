@@ -86,7 +86,7 @@ export default async function ActivityDetailPage({ params }: PageProps) {
   const showStravaLink = isStravaSource(activity.source) && stravaId
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-2xl px-4 sm:px-6 py-6 lg:py-10">
       {/* Back link */}
       <Link
         href="/activities"

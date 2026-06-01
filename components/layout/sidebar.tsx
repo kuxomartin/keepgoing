@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Activity, Utensils, Scale, Heart,
-  Brain, Settings, LogOut, Flame, BookOpen,
+  Brain, Settings, LogOut, Flame, BookOpen, Moon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -12,6 +13,7 @@ import { createClient } from '@/lib/supabase/client'
 const navItems = [
   { href: '/today',      label: 'Today',      icon: LayoutDashboard },
   { href: '/recovery',   label: 'Recovery',   icon: Heart },
+  { href: '/sleep',      label: 'Sleep',      icon: Moon },
   { href: '/activities', label: 'Activities', icon: Activity },
   { href: '/food',       label: 'Intake',     icon: Utensils },
   { href: '/nutrition',  label: 'Nutrition',  icon: Flame },
@@ -33,19 +35,18 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden lg:flex flex-col w-56 bg-white dark:bg-zinc-950 border-r border-gray-200 dark:border-zinc-800 min-h-screen fixed left-0 top-0 z-30">
-      {/* Logo */}
-      <div className="px-5 py-4 border-b border-gray-100 dark:border-zinc-800">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-gray-900 dark:bg-zinc-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <span className="text-white dark:text-zinc-900 font-bold text-sm">K</span>
-          </div>
-          <span className="font-semibold text-gray-900 dark:text-zinc-50 text-sm">KeepGoing</span>
-        </div>
+    <aside className="hidden lg:flex flex-col w-56 bg-white dark:bg-zinc-950 border-r border-[#D9D9D9] dark:border-zinc-800 min-h-screen fixed left-0 top-0 z-30">
+      {/* Logo — navigates to /today */}
+      <div className="border-b border-[#D9D9D9] dark:border-zinc-800">
+        <Link href="/today" className="flex items-center gap-2.5 px-4 py-4 hover:opacity-80 transition-opacity">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="KeepGoing" width={32} height={32} className="rounded-sm flex-shrink-0" />
+          <span className="text-[11px] font-bold text-[#0D0D0D] dark:text-zinc-50 uppercase tracking-[0.1em]">KeepGoing</span>
+        </Link>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-3 space-y-0.5">
+      <nav className="flex-1 py-4 space-y-0.5">
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
@@ -53,10 +54,10 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors',
+                'flex items-center gap-3 px-4 py-2 text-sm transition-colors relative',
                 active
-                  ? 'bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-zinc-50 font-semibold'
-                  : 'font-medium text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-zinc-100',
+                  ? 'text-[#E5173F] font-semibold border-l-2 border-[#E5173F] pl-[14px]'
+                  : 'font-medium text-[#888888] dark:text-zinc-400 hover:text-[#0D0D0D] dark:hover:text-zinc-100 border-l-2 border-transparent pl-[14px]',
               )}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
@@ -67,10 +68,10 @@ export function Sidebar() {
       </nav>
 
       {/* Sign out */}
-      <div className="px-3 py-3 border-t border-gray-100 dark:border-zinc-800">
+      <div className="px-3 py-3 border-t border-[#D9D9D9] dark:border-zinc-800">
         <button
           onClick={handleSignOut}
-          className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-gray-400 dark:text-zinc-500 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-700 dark:hover:text-zinc-300 transition-colors w-full"
+          className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-[#888888] dark:text-zinc-500 hover:bg-gray-50 dark:hover:bg-zinc-800/50 hover:text-[#0D0D0D] dark:hover:text-zinc-300 transition-colors w-full"
         >
           <LogOut className="h-4 w-4 flex-shrink-0" />
           Sign out

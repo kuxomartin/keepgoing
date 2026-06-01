@@ -6,25 +6,44 @@
 
 export const HEALTH_METRICS_ALIASES: Record<string, string[]> = {
   date: ['date', 'day', 'Date', 'Day', 'datum'],
+
+  // Sleep — Apple Health / Health Auto Export column names.
+  // Note: HAXE may export sleep duration in hours (e.g. "7.5") rather than minutes.
+  // The parser handles hours→minutes conversion automatically (value < 24 → hours, ≥ 24 → minutes).
   sleep_minutes: [
-    'sleep_minutes', 'sleep', 'Sleep', 'Sleep Duration', 'Sleep (min)',
-    'sleep_duration', 'total_sleep', 'Total Sleep', 'TotalSleep', 'sleep duration (min)',
+    'sleep_minutes', 'Sleep Minutes',
+    'sleep', 'Sleep',
+    'Sleep Duration', 'sleep_duration', 'sleep duration',
+    'Sleep Duration (hr)', 'Sleep Duration (min)',
+    'Total Sleep', 'total_sleep', 'TotalSleep',
+    'Asleep Duration', 'asleep_duration', 'asleep',
+    'Time Asleep', 'time_asleep',
+    'In Bed Duration', 'in_bed_duration', 'In Bed',
+    'sleep duration (min)', 'sleep duration (hr)',
+    'Spánok', 'spánok', 'Spánok (h)', 'Spánok (min)',  // Slovak
   ],
   deep_sleep_minutes: [
-    'deep_sleep_minutes', 'deep_sleep', 'Deep Sleep', 'Deep Sleep (min)', 'deep sleep', 'DeepSleep',
+    'deep_sleep_minutes', 'Deep Sleep', 'Deep Sleep (min)', 'Deep Sleep (hr)',
+    'deep_sleep', 'deep sleep', 'DeepSleep',
+    'Deep Sleep Duration', 'deep_sleep_duration',
   ],
   rem_sleep_minutes: [
-    'rem_sleep_minutes', 'rem_sleep', 'REM Sleep', 'REM Sleep (min)', 'rem sleep', 'REMSleep', 'REM',
+    'rem_sleep_minutes', 'REM Sleep', 'REM Sleep (min)', 'REM Sleep (hr)',
+    'rem_sleep', 'rem sleep', 'REMSleep', 'REM',
+    'REM Duration', 'rem_duration',
   ],
   resting_hr: [
     'resting_hr', 'resting_heart_rate', 'RHR', 'Resting HR', 'Resting Heart Rate',
     'resting heart rate', 'RestingHR', 'resting_heartrate',
+    'Resting',  // Apple Health / Health Auto Export uses bare "Resting" for resting heart rate
+    'resting',
   ],
   hrv_ms: [
     'hrv_ms', 'hrv', 'HRV', 'Heart Rate Variability', 'heart rate variability', 'HRV (ms)', 'hrv ms',
   ],
   vo2max: [
     'vo2max', 'VO2 Max', 'vo2_max', 'VO2Max', 'vo2 max', 'VO2max', 'Cardio Fitness', 'cardio_fitness',
+    'VO₂ max', 'VO₂ Max', 'VO₂max',  // Apple Health uses unicode subscript ₂
   ],
   steps: ['steps', 'Steps', 'step_count', 'Step Count', 'StepCount', 'daily_steps', 'Daily Steps'],
   active_energy_kcal: [
@@ -180,3 +199,73 @@ export function getUnrecognizedHeaders(
     .filter(({ i }) => !usedIndices.has(i))
     .map(({ h }) => h)
 }
+
+// ============================================================
+// APPLE HEALTH SLEEP SHEET
+// ============================================================
+// Handles the dedicated Sleep sheet from Health Auto Export.
+// Apple Watch sleep stage column names as exported by HAXE.
+
+// Full column alias map for Apple Health / Health Auto Export Sleep sheet.
+// Covers all columns: Date, Main, Start, End, InBed, Asleep, Awake, REM, Core,
+// Deep, Wake Count, Efficiency, Fall Asleep, Respiration, SpO2, HRV, Data Source.
+export const SLEEP_SHEET_ALIASES: Record<string, string[]> = {
+  date: ['date', 'Date', 'day', 'Day', 'datum', 'Datum'],
+
+  start_time: ['Start', 'start', 'start_time', 'Start Time', 'Bedtime', 'Sleep Start'],
+  end_time:   ['End', 'end', 'end_time', 'End Time', 'Wake Time', 'Wake Up', 'Sleep End'],
+
+  in_bed_minutes: [
+    'InBed', 'In Bed', 'in_bed', 'inbed', 'In Bed Duration',
+    'Time in Bed', 'time_in_bed', 'Bed Duration',
+  ],
+  asleep_minutes: [
+    'Asleep', 'asleep', 'Asleep Duration',
+    'Total Sleep', 'total_sleep', 'TotalSleep', 'Sleep Duration', 'Sleep',
+    'Time Asleep', 'time_asleep', 'Spánok', 'spánok',
+  ],
+  awake_minutes: [
+    'Awake', 'awake', 'Awake Duration', 'Time Awake', 'awake_duration',
+  ],
+  rem_minutes: [
+    'REM', 'rem', 'REM Sleep', 'rem_sleep', 'REMSleep',
+    'REM Duration', 'REM Sleep Duration',
+  ],
+  core_minutes: [
+    'Core', 'core', 'Core Sleep', 'core_sleep', 'Core Duration',
+    'Light Sleep', 'light_sleep', 'NREM Light',
+  ],
+  deep_minutes: [
+    'Deep', 'deep', 'Deep Sleep', 'deep_sleep', 'DeepSleep',
+    'Deep Sleep Duration', 'NREM Deep', 'deep_duration',
+  ],
+  wake_count: [
+    'Wake Count', 'wake_count', 'Wakeups', 'Wakeup Count', 'Awakenings',
+    'Number of Wakeups', 'wakeups', 'Počet prebudení',
+  ],
+  efficiency_pct: [
+    'Efficiency', 'efficiency', 'Sleep Efficiency', 'sleep_efficiency',
+    'Efektivita', 'efektivita',
+  ],
+  fall_asleep_minutes: [
+    'Fall Asleep', 'fall_asleep', 'Time to Fall Asleep', 'Sleep Latency',
+    'sleep_latency', 'Onset Latency', 'Zaspanie',
+  ],
+  avg_respiration_rate: [
+    'Avg. Respiration Rate', 'Avg Respiration Rate', 'avg_respiration_rate',
+    'Respiration Rate', 'Breathing Rate', 'avg_resp_rate',
+  ],
+  wrist_temperature: [
+    'Wrist Temperature', 'wrist_temperature', 'Wrist Temp',
+    'Skin Temperature', 'skin_temperature', 'Teplota zápästia',
+  ],
+  low_spo2:  ['Low SpO2', 'low_spo2', 'Min SpO2', 'SpO2 Low',  'Min. SpO2'],
+  high_spo2: ['High SpO2', 'high_spo2', 'Max SpO2', 'SpO2 High', 'Max. SpO2'],
+  avg_spo2:  ['Avg. SpO2', 'avg_spo2', 'SpO2', 'SpO2 Average', 'Avg SpO2'],
+  low_hrv:   ['Low HRV', 'low_hrv', 'HRV Low', 'Min HRV', 'Min. HRV'],
+  high_hrv:  ['High HRV', 'high_hrv', 'HRV High', 'Max HRV', 'Max. HRV'],
+  avg_hrv:   ['Avg. HRV', 'avg_hrv', 'HRV Average', 'Avg HRV', 'HRV'],
+  data_source: ['Data Source', 'data_source', 'Source', 'Device', 'Zariadenie'],
+}
+
+export const SLEEP_SHEET_REQUIRED = ['date']

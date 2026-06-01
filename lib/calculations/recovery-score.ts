@@ -26,14 +26,18 @@ export function getRecoveryScore(metrics: HealthMetrics | null): RecoveryResult 
   let score = 100
   const issues: string[] = []
 
-  // Sleep
-  const sleepH = (metrics.sleep_minutes ?? 0) / 60
-  if (sleepH < 6) {
-    score -= 30
-    issues.push(`Short sleep — ${sleepH.toFixed(1)}h (target: ≥7h)`)
-  } else if (sleepH < 7) {
-    score -= 15
-    issues.push(`Sleep slightly below target — ${sleepH.toFixed(1)}h`)
+  // Sleep — only score if we have actual data (null or 0 = no data, not "0h sleep")
+  const sleepH = metrics.sleep_minutes && metrics.sleep_minutes > 0
+    ? metrics.sleep_minutes / 60
+    : null
+  if (sleepH !== null) {
+    if (sleepH < 6) {
+      score -= 30
+      issues.push(`Short sleep — ${sleepH.toFixed(1)}h (target: ≥7h)`)
+    } else if (sleepH < 7) {
+      score -= 15
+      issues.push(`Sleep slightly below target — ${sleepH.toFixed(1)}h`)
+    }
   }
 
   // HRV

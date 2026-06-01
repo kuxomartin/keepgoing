@@ -49,7 +49,7 @@ export function RestingHrChart({ data }: { data: RestingHrChartPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={180}>
       <LineChart data={filtered} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#D9D9D9" />
         <XAxis
           dataKey="date"
           tickFormatter={(v) => format(parseISO(v), 'd MMM')}
@@ -66,12 +66,12 @@ export function RestingHrChart({ data }: { data: RestingHrChartPoint[] }) {
           width={36}
           unit=" bpm"
         />
-        <ReferenceLine y={60} stroke="#f87171" strokeDasharray="4 4" strokeWidth={1.5} />
+        <ReferenceLine y={60} stroke="#D9D9D9" strokeDasharray="4 4" strokeWidth={1.5} />
         <Tooltip content={<CustomTooltip />} />
         <Line
           type="monotone"
           dataKey="rhr"
-          stroke="#ef4444"
+          stroke="#E5173F"
           strokeWidth={2}
           dot={{ r: 2.5, fill: '#ef4444', strokeWidth: 0 }}
           activeDot={{ r: 4 }}

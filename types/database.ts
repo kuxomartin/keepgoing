@@ -6,7 +6,7 @@ export type ConfidenceLevel = 'low' | 'medium' | 'high'
 export type DataSourceStatus = 'active' | 'inactive' | 'error'
 export type ImportStatus = 'success' | 'partial' | 'error'
 export type RecoveryStatus = 'green' | 'yellow' | 'red'
-export type SupportedDataType = 'health_metrics' | 'weight_logs' | 'strava_activities'
+export type SupportedDataType = 'health_metrics' | 'weight_logs' | 'strava_activities' | 'apple_sleep'
 
 export interface Profile {
   id: string
@@ -195,6 +195,34 @@ export interface DataImportLog {
   error_message: string | null
   metadata: Record<string, unknown> | null
   created_at: string
+}
+
+export interface SleepRecord {
+  id: string
+  user_id: string
+  date: string              // YYYY-MM-DD (morning wake-up date)
+  start_time: string | null // ISO timestamptz — sleep onset
+  end_time: string | null   // ISO timestamptz — wake time
+  in_bed_minutes: number | null
+  asleep_minutes: number | null
+  awake_minutes: number | null
+  rem_minutes: number | null
+  core_minutes: number | null
+  deep_minutes: number | null
+  wake_count: number | null
+  efficiency_pct: number | null  // 0–100
+  fall_asleep_minutes: number | null
+  avg_respiration_rate: number | null
+  wrist_temperature: number | null
+  low_spo2: number | null
+  high_spo2: number | null
+  avg_spo2: number | null
+  low_hrv: number | null
+  high_hrv: number | null
+  avg_hrv: number | null
+  source: string
+  created_at: string
+  updated_at: string
 }
 
 // ============================================================

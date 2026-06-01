@@ -49,6 +49,14 @@ const PRESETS: Array<Omit<GoogleSheetImport, 'id' | 'user_id' | 'created_at' | '
     import_priority: 20,
   },
   {
+    name: 'Apple Health Sleep',
+    spreadsheet_id: '1vFZPmCfeUP4PB0d-e6J-WAWIZJk0D2daJ-hPIX_JvqE',
+    sheet_name: 'Sleep',
+    data_type: 'apple_sleep',
+    enabled: true,
+    import_priority: 25,
+  },
+  {
     name: 'Strava Activities',
     spreadsheet_id: '1mb-cYYIA68o1sn54X4xrQYSeFoh2Wk-Ht78XTqoydHk',
     sheet_name: 'Strava',
@@ -62,12 +70,14 @@ const DATA_TYPE_LABELS: Record<SupportedDataType, string> = {
   health_metrics:    'Health Metrics',
   weight_logs:       'Weight Logs',
   strava_activities: 'Strava Activities',
+  apple_sleep:       'Sleep (Apple Health)',
 }
 
 const DATA_TYPE_BADGE: Record<SupportedDataType, 'blue' | 'green' | 'yellow'> = {
   health_metrics:    'blue',
   weight_logs:       'green',
   strava_activities: 'yellow',
+  apple_sleep:       'blue',
 }
 
 function shortenId(id: string) {
@@ -566,6 +576,7 @@ export function ImportManager() {
                 <option value="health_metrics">Health Metrics</option>
                 <option value="weight_logs">Weight Logs</option>
                 <option value="strava_activities">Strava Activities</option>
+                <option value="apple_sleep">Sleep (Apple Health)</option>
               </select>
             </div>
             <div className="flex items-center gap-3">

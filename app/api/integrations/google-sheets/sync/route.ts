@@ -4,6 +4,7 @@ import {
   syncHealthMetrics,
   syncWeightLogs,
   syncStravaActivities,
+  syncSleepData,
   runImport,
 } from '@/lib/integrations/google-sheets/sync'
 import type { ImportSummary, GoogleSheetImport, SupportedDataType } from '@/types/database'
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
   let { spreadsheetId, sheetName } = body
   const dataType = (body.dataType ?? 'health_metrics') as SupportedDataType
 
-  if (!['health_metrics', 'weight_logs', 'strava_activities'].includes(dataType)) {
+  if (!['health_metrics', 'weight_logs', 'strava_activities', 'apple_sleep'].includes(dataType)) {
     return NextResponse.json({ error: `Unsupported dataType: "${dataType}"` }, { status: 400 })
   }
 
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
     health_metrics:    'google_sheets',
     weight_logs:       'google_sheets_weight',
     strava_activities: 'strava_google_sheets',
+    apple_sleep:       'google_sheets_sleep',
   }
 
   if (!spreadsheetId || !sheetName) {
@@ -122,6 +124,8 @@ export async function POST(request: Request) {
     summary = await syncHealthMetrics(user.id, spreadsheetId, sheetName, supabase)
   } else if (dataType === 'weight_logs') {
     summary = await syncWeightLogs(user.id, spreadsheetId, sheetName, supabase)
+  } else if (dataType === 'apple_sleep') {
+    summary = await syncSleepData(user.id, spreadsheetId, sheetName, supabase)
   } else {
     summary = await syncStravaActivities(user.id, spreadsheetId, sheetName, supabase)
   }

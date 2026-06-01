@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { SupportedDataType } from '@/types/database'
 
-const SUPPORTED_DATA_TYPES: SupportedDataType[] = ['health_metrics', 'weight_logs', 'strava_activities']
+const SUPPORTED_DATA_TYPES: SupportedDataType[] = ['health_metrics', 'weight_logs', 'strava_activities', 'apple_sleep']
 
 // ── GET — list all imports for the authenticated user ─────────────────────────
 export async function GET() {

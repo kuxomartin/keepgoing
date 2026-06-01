@@ -118,6 +118,75 @@ function isEmptyRow(row: string[]): boolean {
 }
 
 /**
+ * Parses a sleep duration cell into minutes.
+ *
+ * Apple Health / Health Auto Export exports sleep in several formats:
+ *  - "6h45m"  or "6h 45m" → 405 min   (Health Auto Export sleep sheet format)
+ *  - "7h"                 → 420 min
+ *  - "45m"                → 45 min
+ *  - "7.5"                → 450 min   (decimal hours)
+ *  - "7,5"                → 450 min   (European decimal)
+ *  - "7:30"               → 450 min   (H:MM)
+ *  - "450"                → 450 min   (plain minutes)
+ *  - "7.5 hr", "450 min"  → with suffix
+ *
+ * Returns null for empty, zero, or unparseable input.
+ */
+function parseSleepMinutes(raw: string | undefined): number | null {
+  if (!raw || raw.trim() === '' || raw.trim() === '-') return null
+  let s = raw.trim()
+
+  // "6h:45m" / "6h45m" / "6h 45m" / "6H:45M"
+  // Health Auto Export uses "6h:45m" (colon-separated) format.
+  const hmMatch = s.match(/^(\d+)\s*h\s*:?\s*(\d+)\s*m?$/i)
+  if (hmMatch) {
+    const minutes = parseInt(hmMatch[1], 10) * 60 + parseInt(hmMatch[2], 10)
+    return minutes > 0 ? minutes : null
+  }
+
+  // "6h" — hours only
+  const hOnly = s.match(/^(\d+)\s*h$/i)
+  if (hOnly) {
+    const minutes = parseInt(hOnly[1], 10) * 60
+    return minutes > 0 ? minutes : null
+  }
+
+  // "45m" — minutes only
+  const mOnly = s.match(/^(\d+)\s*m$/i)
+  if (mOnly) {
+    const minutes = parseInt(mOnly[1], 10)
+    return minutes > 0 ? minutes : null
+  }
+
+  // Strip remaining unit suffixes for numeric parsing
+  s = s.replace(/\s*(hours?|hrs?|h)\s*$/i, '')
+       .replace(/\s*(minutes?|mins?|m)\s*$/i, '')
+       .trim()
+
+  // H:MM or HH:MM
+  const colonMatch = s.match(/^(\d{1,2}):(\d{2})$/)
+  if (colonMatch) {
+    const minutes = parseInt(colonMatch[1], 10) * 60 + parseInt(colonMatch[2], 10)
+    return minutes > 0 ? minutes : null
+  }
+
+  // Normalize comma-as-decimal (European)
+  const commas = (s.match(/,/g) ?? []).length
+  const dots   = (s.match(/\./g) ?? []).length
+  if (commas === 1 && dots === 0) {
+    s = s.replace(',', '.')
+  } else {
+    s = s.replace(/,/g, '')
+  }
+
+  const n = parseFloat(s)
+  if (isNaN(n) || n <= 0) return null
+
+  // If < 24 → almost certainly hours. If ≥ 24 → minutes.
+  return n < 24 ? Math.round(n * 60) : Math.round(n)
+}
+
+/**
  * Parses a numeric value from a weight cell.
  * Handles: comma-as-decimal ("83,5"), kg/% /cm suffixes, empty → null.
  */
@@ -235,9 +304,9 @@ export function parseHealthMetricsRows(
     const record: PartialHealthMetrics = {
       date,
       source,
-      sleep_minutes:       parseInt2(row[columnMap['sleep_minutes']]),
-      deep_sleep_minutes:  parseInt2(row[columnMap['deep_sleep_minutes']]),
-      rem_sleep_minutes:   parseInt2(row[columnMap['rem_sleep_minutes']]),
+      sleep_minutes:       parseSleepMinutes(row[columnMap['sleep_minutes']]),
+      deep_sleep_minutes:  parseSleepMinutes(row[columnMap['deep_sleep_minutes']]),
+      rem_sleep_minutes:   parseSleepMinutes(row[columnMap['rem_sleep_minutes']]),
       resting_hr:          parseInt2(row[columnMap['resting_hr']]),
       hrv_ms:              parseNum(row[columnMap['hrv_ms']]),
       vo2max:              parseNum(row[columnMap['vo2max']]),
@@ -410,3 +479,137 @@ export function parseStravaActivitiesRows(
 
   return { records, skipped, errors }
 }
+
+// ============================================================
+// APPLE HEALTH SLEEP SHEET PARSER
+// ============================================================
+
+/** Parses "96%" or "96.5" → 96.5. Handles comma decimals. */
+function parsePct(raw: string | undefined): number | null {
+  if (!raw || raw.trim() === '' || raw.trim() === '-') return null
+  const s = raw.trim().replace('%', '').trim().replace(',', '.')
+  const n = parseFloat(s)
+  return isNaN(n) ? null : n
+}
+
+/** Parses temperature delta "+0.2" / "-0.1" or absolute "36.5". */
+function parseTemp(raw: string | undefined): number | null {
+  if (!raw || raw.trim() === '' || raw.trim() === '-') return null
+  const s = raw.trim().replace(',', '.')
+  const n = parseFloat(s)
+  return isNaN(n) ? null : n
+}
+
+export interface SleepParseResult {
+  records: Array<{
+    date: string
+    start_time: string | null
+    end_time: string | null
+    in_bed_minutes: number | null
+    asleep_minutes: number | null
+    awake_minutes: number | null
+    rem_minutes: number | null
+    core_minutes: number | null
+    deep_minutes: number | null
+    wake_count: number | null
+    efficiency_pct: number | null
+    fall_asleep_minutes: number | null
+    avg_respiration_rate: number | null
+    wrist_temperature: number | null
+    low_spo2: number | null
+    high_spo2: number | null
+    avg_spo2: number | null
+    low_hrv: number | null
+    high_hrv: number | null
+    avg_hrv: number | null
+    source: string
+    // Legacy health_metrics fields — kept for backward compat upsert
+    sleep_minutes: number | null
+    deep_sleep_minutes: number | null
+    rem_sleep_minutes: number | null
+  }>
+  skipped: number
+  errors: string[]
+}
+
+export function parseSleepSheetRows(
+  rows: string[][],
+  columnMap: Record<string, number>,
+  source = 'google_sheets_sleep'
+): SleepParseResult {
+  const records: SleepParseResult['records'] = []
+  const errors: string[] = []
+  let skipped = 0
+
+  const col = (field: string) => columnMap[field] !== undefined ? columnMap[field] : -1
+  const cell = (row: string[], field: string) => col(field) >= 0 ? row[col(field)] : undefined
+
+  const dataRows = rows.slice(1)
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i]
+    const rowNum = i + 2
+
+    if (isEmptyRow(row)) { skipped++; continue }
+
+    const rawDate = cell(row, 'date')
+    const date = rawDate ? parseFlexibleDate(rawDate) : null
+    if (!date) {
+      errors.push(`Row ${rowNum}: could not parse date "${rawDate ?? ''}"`)
+      skipped++
+      continue
+    }
+
+    const asleep = parseSleepMinutes(cell(row, 'asleep_minutes'))
+    const inBed  = parseSleepMinutes(cell(row, 'in_bed_minutes'))
+    const deep   = parseSleepMinutes(cell(row, 'deep_minutes'))
+    const rem    = parseSleepMinutes(cell(row, 'rem_minutes'))
+    const core   = parseSleepMinutes(cell(row, 'core_minutes'))
+    const awake  = parseSleepMinutes(cell(row, 'awake_minutes'))
+
+    // Skip rows with no usable sleep data
+    if (asleep == null && inBed == null && deep == null && rem == null && core == null) {
+      skipped++
+      continue
+    }
+
+    // Parse start_time and end_time — full datetime if available, else null
+    const rawStart = cell(row, 'start_time')
+    const rawEnd   = cell(row, 'end_time')
+    const startIso = rawStart ? parseFlexibleDateTime(rawStart) : null
+    const endIso   = rawEnd   ? parseFlexibleDateTime(rawEnd)   : null
+
+    records.push({
+      date,
+      start_time:           startIso,
+      end_time:             endIso,
+      in_bed_minutes:       inBed,
+      asleep_minutes:       asleep,
+      awake_minutes:        awake,
+      rem_minutes:          rem,
+      core_minutes:         core,
+      deep_minutes:         deep,
+      wake_count:           parseInt2(cell(row, 'wake_count')),
+      efficiency_pct:       parsePct(cell(row, 'efficiency_pct')),
+      fall_asleep_minutes:  parseSleepMinutes(cell(row, 'fall_asleep_minutes')),
+      avg_respiration_rate: parseNum(cell(row, 'avg_respiration_rate')),
+      wrist_temperature:    parseTemp(cell(row, 'wrist_temperature')),
+      low_spo2:             parsePct(cell(row, 'low_spo2')),
+      high_spo2:            parsePct(cell(row, 'high_spo2')),
+      avg_spo2:             parsePct(cell(row, 'avg_spo2')),
+      low_hrv:              parseNum(cell(row, 'low_hrv')),
+      high_hrv:             parseNum(cell(row, 'high_hrv')),
+      avg_hrv:              parseNum(cell(row, 'avg_hrv')),
+      source,
+      // Legacy fields for health_metrics backward compat
+      sleep_minutes:      asleep,
+      deep_sleep_minutes: deep,
+      rem_sleep_minutes:  rem,
+    })
+  }
+
+  return { records, skipped, errors }
+}
+
+// Expose parseFlexibleDateTime for sync.ts
+export { parseFlexibleDateTime as _parseFlexibleDateTime }

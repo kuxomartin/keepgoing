@@ -23,21 +23,46 @@ function CustomTooltip({ active, payload, label }: {
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-3 py-2 text-xs">
-      <p className="font-medium text-gray-700">{label ? format(parseISO(label), 'EEE d MMM') : ''}</p>
-      <p className="text-blue-700">{payload[0].value} ms HRV</p>
+    <div className="bg-white border border-[#D9D9D9] rounded-lg px-3 py-2 text-xs">
+      <p className="font-medium text-[#0D0D0D]">{label ? format(parseISO(label), 'EEE d MMM') : ''}</p>
+      <p className="text-[#888888]">{payload[0].value} ms HRV</p>
     </div>
   )
 }
 
-export function HrvChart({ data }: { data: HrvChartPoint[] }) {
+export function HrvChart({ data, minimal }: { data: HrvChartPoint[]; minimal?: boolean }) {
   const filtered = data.filter((d) => d.hrv !== null) as { date: string; hrv: number }[]
 
   if (filtered.length === 0) {
     return (
-      <div className="h-40 flex items-center justify-center text-sm text-gray-400">
+      <div className="h-40 flex items-center justify-center text-sm text-[#888888]">
         No HRV data yet
       </div>
+    )
+  }
+
+  // Minimal mode — atmospheric curve only, no axes/grid/tooltip
+  if (minimal) {
+    return (
+      <ResponsiveContainer width="100%" height={120}>
+        <AreaChart data={filtered} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id="hrvGradMinimal" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#ffffff" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#ffffff" stopOpacity={0}   />
+            </linearGradient>
+          </defs>
+          <Area
+            type="monotone"
+            dataKey="hrv"
+            stroke="#ffffff"
+            strokeWidth={1.5}
+            fill="url(#hrvGradMinimal)"
+            dot={false}
+            activeDot={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     )
   }
 
@@ -46,21 +71,21 @@ export function HrvChart({ data }: { data: HrvChartPoint[] }) {
       <AreaChart data={filtered} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id="hrvGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#93c5fd" stopOpacity={0.4} />
-            <stop offset="95%" stopColor="#93c5fd" stopOpacity={0} />
+            <stop offset="5%"  stopColor="#0D0D0D" stopOpacity={0.15} />
+            <stop offset="95%" stopColor="#0D0D0D" stopOpacity={0}    />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#D9D9D9" />
         <XAxis
           dataKey="date"
           tickFormatter={(v) => format(parseISO(v), 'd MMM')}
-          tick={{ fontSize: 11, fill: '#9ca3af' }}
+          tick={{ fontSize: 11, fill: '#888888' }}
           axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
-          tick={{ fontSize: 11, fill: '#9ca3af' }}
+          tick={{ fontSize: 11, fill: '#888888' }}
           axisLine={false}
           tickLine={false}
           width={36}
@@ -70,11 +95,11 @@ export function HrvChart({ data }: { data: HrvChartPoint[] }) {
         <Area
           type="monotone"
           dataKey="hrv"
-          stroke="#3b82f6"
-          strokeWidth={2}
+          stroke="#0D0D0D"
+          strokeWidth={1.5}
           fill="url(#hrvGrad)"
-          dot={{ r: 2.5, fill: '#3b82f6', strokeWidth: 0 }}
-          activeDot={{ r: 4 }}
+          dot={{ r: 2, fill: '#0D0D0D', strokeWidth: 0 }}
+          activeDot={{ r: 3 }}
         />
       </AreaChart>
     </ResponsiveContainer>

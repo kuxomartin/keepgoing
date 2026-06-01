@@ -45,7 +45,7 @@ export default async function AddFoodPage({ searchParams }: PageProps) {
   const yesterdayMeals = (yesterdayRaw ?? []) as FoodLog[]
 
   return (
-    <div className="max-w-lg mx-auto pb-4">
+    <div className="max-w-lg mx-auto px-4 sm:px-6 py-6 lg:py-10">
       {/* Header */}
       <div className="flex items-center gap-2 mb-6">
         <Link

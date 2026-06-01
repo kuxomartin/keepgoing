@@ -20,11 +20,11 @@ function CustomTooltip({ active, payload, label }: {
   if (!active || !payload?.length) return null
   const hours = (payload[0].value / 60).toFixed(1)
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-3 py-2 text-xs">
+    <div className="bg-white border border-[#D9D9D9] px-3 py-2 text-xs">
       <p className="font-medium text-gray-700">
         Week of {label ? format(parseISO(label), 'd MMM') : ''}
       </p>
-      <p className="text-blue-700">{payload[0].value} min ({hours}h)</p>
+      <p className="text-[#0D0D0D]">{payload[0].value} min ({hours}h)</p>
       {payload[1] && <p className="text-gray-500">{payload[1].value?.toFixed(1)} km</p>}
     </div>
   )
@@ -33,7 +33,7 @@ function CustomTooltip({ active, payload, label }: {
 export function ActivityDurationChart({ data }: { data: WeeklyActivityTotal[] }) {
   if (data.length === 0) {
     return (
-      <div className="h-40 flex items-center justify-center text-sm text-gray-400">
+      <div className="h-40 flex items-center justify-center text-sm text-[#888888]">
         No activity data yet
       </div>
     )
@@ -42,7 +42,7 @@ export function ActivityDurationChart({ data }: { data: WeeklyActivityTotal[] })
   return (
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#D9D9D9" vertical={false} />
         <XAxis
           dataKey="weekStart"
           tickFormatter={(v) => format(parseISO(v), 'd MMM')}
@@ -60,7 +60,7 @@ export function ActivityDurationChart({ data }: { data: WeeklyActivityTotal[] })
         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
         <Bar
           dataKey="totalDurationMinutes"
-          fill="#3b82f6"
+          fill="#0D0D0D"
           radius={[3, 3, 0, 0]}
           name="duration"
         />

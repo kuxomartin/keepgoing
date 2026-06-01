@@ -4,7 +4,7 @@ import { fetchSheetRows } from '@/lib/integrations/google-sheets/client'
 import {
   HEALTH_METRICS_ALIASES, HEALTH_METRICS_REQUIRED,
   WEIGHT_LOGS_ALIASES,    WEIGHT_LOGS_REQUIRED,
-  STRAVA_ACTIVITIES_ALIASES, STRAVA_ACTIVITIES_REQUIRED,
+  STRAVA_ACTIVITIES_ALIASES, STRAVA_ACTIVITIES_REQUIRED, SLEEP_SHEET_ALIASES, SLEEP_SHEET_REQUIRED,
   resolveColumnMap, getMissingRequired, getUnrecognizedHeaders,
 } from '@/lib/integrations/google-sheets/mapper'
 import type { SheetPreview, SupportedDataType } from '@/types/database'
@@ -13,11 +13,13 @@ const ALIASES: Record<SupportedDataType, Record<string, string[]>> = {
   health_metrics:    HEALTH_METRICS_ALIASES,
   weight_logs:       WEIGHT_LOGS_ALIASES,
   strava_activities: STRAVA_ACTIVITIES_ALIASES,
+  apple_sleep:       SLEEP_SHEET_ALIASES,
 }
 const REQUIRED: Record<SupportedDataType, string[]> = {
   health_metrics:    HEALTH_METRICS_REQUIRED,
   weight_logs:       WEIGHT_LOGS_REQUIRED,
   strava_activities: STRAVA_ACTIVITIES_REQUIRED,
+  apple_sleep:       SLEEP_SHEET_REQUIRED,
 }
 
 async function runPreview(

@@ -29,13 +29,13 @@ function CustomTooltip({ active, payload, label }: {
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-3 py-2 text-xs">
-      <p className="font-medium text-gray-700 mb-1">
+    <div className="bg-white border border-[#D9D9D9] px-3 py-2 text-xs">
+      <p className="font-medium text-[#0D0D0D] mb-1">
         {label ? format(parseISO(label), 'EEE d MMM') : ''}
       </p>
       {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color }}>
-          {p.name === 'weight' ? 'Weight' : '7-day avg'}: {p.value.toFixed(1)} kg
+        <p key={p.name} className="text-[#888888]">
+          {p.name === 'weight' ? 'Weight' : '7-day avg'}: <span className="font-semibold text-[#0D0D0D]">{p.value.toFixed(1)} kg</span>
         </p>
       ))}
     </div>
@@ -58,11 +58,11 @@ export function WeightChart({ data }: WeightChartProps) {
   return (
     <ResponsiveContainer width="100%" height={220}>
       <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+        <CartesianGrid strokeDasharray="3 3" stroke="#D9D9D9" />
         <XAxis
           dataKey="date"
           tickFormatter={(v) => format(parseISO(v), 'd MMM')}
-          tick={{ fontSize: 11, fill: '#9ca3af' }}
+          tick={{ fontSize: 11, fill: '#888888' }}
           axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
@@ -70,7 +70,7 @@ export function WeightChart({ data }: WeightChartProps) {
         <YAxis
           domain={[minY, maxY]}
           tickFormatter={(v) => `${v}`}
-          tick={{ fontSize: 11, fill: '#9ca3af' }}
+          tick={{ fontSize: 11, fill: '#888888' }}
           axisLine={false}
           tickLine={false}
           width={36}
@@ -79,19 +79,19 @@ export function WeightChart({ data }: WeightChartProps) {
         <Line
           type="monotone"
           dataKey="weight"
-          stroke="#d1d5db"
+          stroke="#D9D9D9"
           strokeWidth={1.5}
-          dot={{ r: 2.5, fill: '#9ca3af', strokeWidth: 0 }}
-          activeDot={{ r: 4 }}
+          dot={{ r: 2, fill: '#888888', strokeWidth: 0 }}
+          activeDot={{ r: 3 }}
           name="weight"
         />
         <Line
           type="monotone"
           dataKey="ma7"
-          stroke="#3b82f6"
-          strokeWidth={2.5}
+          stroke="#0D0D0D"
+          strokeWidth={2}
           dot={false}
-          activeDot={{ r: 4, fill: '#3b82f6' }}
+          activeDot={{ r: 3, fill: '#0D0D0D' }}
           name="ma7"
         />
       </LineChart>

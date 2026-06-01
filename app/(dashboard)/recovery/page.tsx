@@ -13,53 +13,63 @@ import { mockHealthMetrics } from '@/lib/mock-data/demo-data'
 import type { HealthMetrics } from '@/types/database'
 import { cn } from '@/lib/utils'
 
-const SOURCE_PRIORITY = ['google_sheets', 'apple_health_export', 'manual', 'mock']
+/**
+ * Merges all health_metrics rows for the same date into one record.
+ * Different sources hold different fields:
+ *   google_sheets       → HRV, steps, energy, resting HR, VO₂ max
+ *   google_sheets_sleep → sleep_minutes, deep_sleep_minutes, rem_sleep_minutes
+ *
+ * Strategy: for each field, use the first non-null value found across all rows
+ * for that date, preferring google_sheets over google_sheets_sleep for fields
+ * they both might provide.
+ */
+function mergeByDate(metrics: HealthMetrics[]): HealthMetrics[] {
+  const SOURCE_PRIORITY = ['google_sheets', 'google_sheets_sleep', 'apple_health_export', 'manual', 'mock']
+  // Sort by source priority so higher-priority sources are merged first
+  const sorted = [...metrics].sort((a, b) =>
+    SOURCE_PRIORITY.indexOf(a.source) - SOURCE_PRIORITY.indexOf(b.source)
+  )
 
-function deduplicateByDate(metrics: HealthMetrics[]): HealthMetrics[] {
   const byDate = new Map<string, HealthMetrics>()
-  for (const m of metrics) {
+  for (const m of sorted) {
     const existing = byDate.get(m.date)
     if (!existing) {
-      byDate.set(m.date, m)
+      byDate.set(m.date, { ...m })
     } else {
-      const existingPrio = SOURCE_PRIORITY.indexOf(existing.source)
-      const newPrio = SOURCE_PRIORITY.indexOf(m.source)
-      if (newPrio < existingPrio) byDate.set(m.date, m)
+      // Merge: fill in any null fields from this row
+      const merged = { ...existing }
+      if (merged.sleep_minutes      == null && m.sleep_minutes      != null) merged.sleep_minutes      = m.sleep_minutes
+      if (merged.deep_sleep_minutes == null && m.deep_sleep_minutes != null) merged.deep_sleep_minutes = m.deep_sleep_minutes
+      if (merged.rem_sleep_minutes  == null && m.rem_sleep_minutes  != null) merged.rem_sleep_minutes  = m.rem_sleep_minutes
+      if (merged.hrv_ms             == null && m.hrv_ms             != null) merged.hrv_ms             = m.hrv_ms
+      if (merged.resting_hr         == null && m.resting_hr         != null) merged.resting_hr         = m.resting_hr
+      if (merged.steps              == null && m.steps              != null) merged.steps              = m.steps
+      if (merged.active_energy_kcal == null && m.active_energy_kcal!= null) merged.active_energy_kcal = m.active_energy_kcal
+      if (merged.resting_energy_kcal== null && m.resting_energy_kcal!=null) merged.resting_energy_kcal= m.resting_energy_kcal
+      if (merged.vo2max             == null && m.vo2max             != null) merged.vo2max             = m.vo2max
+      byDate.set(m.date, merged)
     }
   }
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date))
 }
 
-// ── Status config ─────────────────────────────────────────────────────────────
-// Recovery card = diagnostics only. No actions — Today owns actions.
-// Red accent is reserved for low recovery: the one intentional signal on this page.
-
 const STATUS_CONFIG = {
-  green:  {
-    bar:          'bg-emerald-500',
-    headlineText: 'Well recovered today.',
-    headlineCls:  'text-emerald-300',
-  },
-  yellow: {
-    bar:          'bg-amber-400',
-    headlineText: 'Moderate recovery today.',
-    headlineCls:  'text-amber-300',
-  },
-  red:    {
-    bar:          'bg-[#E5173F]',
-    headlineText: 'Low recovery today.',
-    headlineCls:  'text-[#E5173F]',   // brand red — intentional accent
-  },
+  green:  { headlineText: 'Well recovered today.',     headlineCls: 'text-[#16A34A]' },
+  yellow: { headlineText: 'Moderate recovery today.',  headlineCls: 'text-[#D97706]' },
+  red:    { headlineText: 'Low recovery today.',       headlineCls: 'text-[#E5173F]' },
 } as const
 
-// ── Trend labels for outside-card vitals (light background) ──────────────────
-
 const TREND_LABEL: Record<string, { text: string; cls: string }> = {
-  green: { text: '↑ improving', cls: 'text-emerald-500 dark:text-emerald-400'  },
-  amber: { text: '↓ declining', cls: 'text-amber-500 dark:text-amber-400'      },
-  red:   { text: '↓ declining', cls: 'text-[#E5173F]'                          },
-  blue:  { text: '→ stable',    cls: 'text-gray-400 dark:text-zinc-500'        },
-  gray:  { text: '',            cls: ''                                         },
+  green: { text: '↑ improving', cls: 'text-[#16A34A]' },
+  amber: { text: '↓ declining', cls: 'text-[#D97706]' },
+  red:   { text: '↓ declining', cls: 'text-[#E5173F]' },
+  blue:  { text: '→ stable',   cls: 'text-white/40'   },
+  gray:  { text: '',           cls: ''                 },
+}
+
+const TREND_LABEL_LIGHT: Record<string, string> = {
+  green: 'text-[#16A34A]', amber: 'text-[#D97706]', red: 'text-[#D97706]',
+  blue:  'text-[#888888]', gray: 'text-[#888888]',
 }
 
 export default async function RecoveryPage() {
@@ -77,16 +87,22 @@ export default async function RecoveryPage() {
 
   const metrics: HealthMetrics[] =
     rawMetrics && rawMetrics.length > 0
-      ? deduplicateByDate(rawMetrics as HealthMetrics[])
+      ? mergeByDate(rawMetrics as HealthMetrics[])
       : mockHealthMetrics.slice().sort((a, b) => a.date.localeCompare(b.date))
 
+  const isUsingMock = !rawMetrics || rawMetrics.length === 0
+
+  // Today's or most recent metrics
   const todayMetrics = metrics.find((m) => m.date === today) ?? metrics[metrics.length - 1] ?? null
   const recovery     = getRecoveryScore(todayMetrics)
 
-  // Chart data
+  // ── Chart data ─────────────────────────────────────────────────────────────
+  // Sleep: use null for missing/zero values so chart skips them
   const sleepData = metrics.map((m) => ({
     date:  m.date,
-    hours: Math.round(((m.sleep_minutes ?? 0) / 60) * 10) / 10,
+    hours: m.sleep_minutes && m.sleep_minutes > 0
+      ? Math.round((m.sleep_minutes / 60) * 10) / 10
+      : null,
   }))
   const hrvData = metrics.map((m) => ({
     date: m.date,
@@ -94,195 +110,199 @@ export default async function RecoveryPage() {
   }))
   const rhrData = metrics.map((m) => ({ date: m.date, rhr: m.resting_hr }))
 
-  // 7-day spark arrays for trend direction
+  // ── Spark arrays for trend ─────────────────────────────────────────────────
   const last7      = metrics.slice(-7)
   const hrvSpark   = last7.map(m => m.hrv_ms ? Number(m.hrv_ms) : null).filter((v): v is number => v != null)
-  const sleepSpark = last7.map(m => m.sleep_minutes ? m.sleep_minutes / 60 : null).filter((v): v is number => v != null)
+  const sleepSpark = last7.map(m => m.sleep_minutes && m.sleep_minutes > 0 ? m.sleep_minutes / 60 : null).filter((v): v is number => v != null)
   const rhrSpark   = last7.map(m => m.resting_hr).filter((v): v is number => v != null)
 
-  // Pre-compute trend keys
   const hrvTrendKey   = hrvSpark.length >= 4   ? trendColor(hrvSpark,   true)  : 'gray'
   const sleepTrendKey = sleepSpark.length >= 4 ? trendColor(sleepSpark, true)  : 'gray'
   const rhrTrendKey   = rhrSpark.length >= 4   ? trendColor(rhrSpark,   false) : 'gray'
 
-  // 7-day averages
-  const avg7dSleep = sevenDayAverage(metrics.map((m) => m.sleep_minutes ? m.sleep_minutes / 60 : null))
-  const avg7dHrv   = sevenDayAverage(metrics.map((m) => m.hrv_ms ? Number(m.hrv_ms) : null))
-  const avg7dRhr   = sevenDayAverage(metrics.map((m) => m.resting_hr))
-
-  const isUsingMock = !rawMetrics || rawMetrics.length === 0
+  // ── 14-day averages ────────────────────────────────────────────────────────
+  const avg14dSleep = sevenDayAverage(metrics.map(m => m.sleep_minutes && m.sleep_minutes > 0 ? m.sleep_minutes / 60 : null))
+  const avg14dHrv   = sevenDayAverage(metrics.map(m => m.hrv_ms ? Number(m.hrv_ms) : null))
+  const avg14dRhr   = sevenDayAverage(metrics.map(m => m.resting_hr))
 
   const heroStatus = recovery.status as keyof typeof STATUS_CONFIG
   const hero       = STATUS_CONFIG[heroStatus] ?? STATUS_CONFIG.yellow
 
-  // Today's raw values for outside-card metrics
-  const sleepH   = todayMetrics?.sleep_minutes ? todayMetrics.sleep_minutes / 60 : null
+  // Sleep: use the most recent day with actual sleep data (not just today)
+  const recentWithSleep = [...metrics].reverse().find(m => m.sleep_minutes && m.sleep_minutes > 0)
+  const sleepH = recentWithSleep?.sleep_minutes
+    ? Math.round((recentWithSleep.sleep_minutes / 60) * 10) / 10
+    : null
+
+  // HRV and RHR from todayMetrics (fallback to most recent)
   const hrvValue = todayMetrics?.hrv_ms != null ? Math.round(Number(todayMetrics.hrv_ms)) : null
   const rhrValue = todayMetrics?.resting_hr ?? null
 
-  const hasVitals = sleepH != null || hrvValue != null || rhrValue != null
-
   return (
-    <div className="space-y-10">
+    <div className="flex flex-col">
 
-      {/* Page label */}
-      <div>
-        <p className="text-[11px] font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-widest">Recovery</p>
-        {isUsingMock && (
-          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-3 py-1.5 inline-block">
-            Showing demo data — sync your Google Sheet in Settings to see real data
-          </p>
+      {/* ═══════════════════════════════════════════════════════════════════
+          ZONE 1 — Dark Control Room
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="bg-[#0D0D0D] flex flex-col px-6 sm:px-10 lg:px-14 py-12 lg:py-16" style={{ minHeight: '500px' }}>
+
+        <div className="flex items-center justify-between mb-10">
+          <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.15em]">Recovery</p>
+          {isUsingMock && <span className="text-[10px] text-amber-400/60 uppercase tracking-widest">demo data</span>}
+        </div>
+
+        {/* Status headline */}
+        <h1 className={cn('font-display font-bold leading-tight mb-4', 'text-[2.5rem] sm:text-[3rem]', hero.headlineCls)}>
+          {hero.headlineText}
+        </h1>
+
+        {/* Issues — filtered: never show "0.0h" */}
+        {recovery.issues.filter(i => !i.includes('0.0h')).length > 0 && (
+          <div className="space-y-2 mb-10 max-w-xl">
+            {recovery.issues.filter(i => !i.includes('0.0h')).map((issue, i) => (
+              <p key={i} className="text-base text-white/55 leading-relaxed">{issue}</p>
+            ))}
+          </div>
+        )}
+
+        {/* HRV — 120px hero number */}
+        {hrvValue != null ? (
+          <div className="mt-auto">
+            <div className="flex items-baseline gap-3">
+              <span className="font-display font-bold text-white tabular-nums leading-none" style={{ fontSize: '7.5rem' }}>
+                {hrvValue}
+              </span>
+              <span className="text-xl text-white/25">ms</span>
+            </div>
+            <div className="flex items-center gap-3 mt-2">
+              <span className="text-[10px] font-bold text-white/25 uppercase tracking-[0.15em]">HRV</span>
+              <MetricInfo slug="hrv" />
+              {TREND_LABEL[hrvTrendKey].text && (
+                <span className={cn('text-[10px] font-bold uppercase tracking-[0.15em]', TREND_LABEL[hrvTrendKey].cls)}>
+                  {TREND_LABEL[hrvTrendKey].text}
+                </span>
+              )}
+              {avg14dHrv && (
+                <span className="text-[10px] text-white/25">14d avg: {avg14dHrv} ms</span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-auto">
+            <p className="text-white/25 text-sm">No HRV data</p>
+          </div>
+        )}
+
+        {/* Atmospheric HRV curve */}
+        {hrvData.some(d => d.hrv != null) && (
+          <div className="mt-8 -mx-6 sm:-mx-10 lg:-mx-14">
+            <div className="opacity-20 h-[120px]">
+              <HrvChart data={hrvData} minimal />
+            </div>
+          </div>
         )}
       </div>
 
-      {/* ── DIAGNOSTIC CARD ──────────────────────────────────────────────────
-          Briefing-style. Answers: what is happening and why.
-          No score. No actions. Recovery = diagnostics. Today = decisions.
-      ─────────────────────────────────────────────────────────────────────── */}
-      <div className="relative rounded-2xl overflow-hidden bg-zinc-950">
-        {/* Status accent — thin top bar */}
-        <div className={cn('absolute top-0 left-0 right-0 h-0.5', hero.bar)} />
+      {/* ═══════════════════════════════════════════════════════════════════
+          ZONE 2 — Warm Stone / Vitals
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="bg-[#F2EDE6] dark:bg-zinc-900 px-6 sm:px-10 lg:px-14 py-10">
 
-        <div className="px-6 pt-6 pb-8 space-y-4">
+        <div className="flex gap-12 flex-wrap">
 
-          {/* Eyebrow */}
-          <span className="text-[10px] font-semibold text-white/30 uppercase tracking-widest block">
-            Today
-          </span>
-
-          {/* Status headline — the hero of this card */}
-          <p className={cn('text-3xl font-bold leading-snug', hero.headlineCls)}>
-            {hero.headlineText}
-          </p>
-
-          {/* Interpretation — what the data says (diagnostic only) */}
-          {recovery.issues.length > 0 && (
-            <div className="space-y-1.5 pt-1">
-              {recovery.issues.map((issue, i) => (
-                <p key={i} className="text-sm text-white/55 leading-relaxed">
-                  {issue}
-                </p>
-              ))}
+          {/* Sleep — use most recent real data */}
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display font-bold text-[#0D0D0D] dark:text-zinc-50 tabular-nums leading-none" style={{ fontSize: '3rem' }}>
+                {sleepH != null ? `${sleepH}` : '—'}
+              </span>
+              {sleepH != null && <span className="text-sm text-[#888888]">h</span>}
             </div>
-          )}
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Sleep</span>
+              <MetricInfo slug="sleep" />
+              {TREND_LABEL[sleepTrendKey].text && (
+                <span className={cn('text-[10px] font-bold uppercase tracking-[0.12em]', TREND_LABEL_LIGHT[sleepTrendKey])}>
+                  {TREND_LABEL[sleepTrendKey].text}
+                </span>
+              )}
+            </div>
+            {sleepH == null && <p className="text-xs text-[#888888] mt-1">No recent sleep data</p>}
+          </div>
+
+          {/* Resting HR */}
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display font-bold text-[#0D0D0D] dark:text-zinc-50 tabular-nums leading-none" style={{ fontSize: '3rem' }}>
+                {rhrValue != null ? rhrValue : '—'}
+              </span>
+              {rhrValue != null && <span className="text-sm text-[#888888]">bpm</span>}
+            </div>
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Resting HR</span>
+              <MetricInfo slug="resting-heart-rate" />
+              {TREND_LABEL[rhrTrendKey].text && (
+                <span className={cn('text-[10px] font-bold uppercase tracking-[0.12em]', TREND_LABEL_LIGHT[rhrTrendKey])}>
+                  {TREND_LABEL[rhrTrendKey].text}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Recovery score */}
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="font-display font-bold text-[#0D0D0D] dark:text-zinc-50 tabular-nums leading-none" style={{ fontSize: '3rem' }}>
+                {recovery.score}
+              </span>
+              <span className="text-sm text-[#888888]">/ 100</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Recovery score</span>
+              <MetricInfo slug="recovery-score" />
+            </div>
+          </div>
         </div>
+
+        {/* 14-day averages */}
+        {(avg14dSleep || avg14dHrv || avg14dRhr) && (
+          <div className="flex flex-wrap gap-x-5 gap-y-1 mt-6 pt-5 border-t border-[#D9D9D9]">
+            {avg14dSleep && <p className="text-xs text-[#888888]">14d sleep: <span className="font-semibold text-[#0D0D0D] dark:text-zinc-300">{avg14dSleep}h</span></p>}
+            {avg14dHrv   && <p className="text-xs text-[#888888]">14d HRV: <span className="font-semibold text-[#0D0D0D] dark:text-zinc-300">{avg14dHrv} ms</span></p>}
+            {avg14dRhr   && <p className="text-xs text-[#888888]">14d RHR: <span className="font-semibold text-[#0D0D0D] dark:text-zinc-300">{avg14dRhr} bpm</span></p>}
+          </div>
+        )}
       </div>
 
-      {/* ── RAW VITALS — outside the card, large, diagnostic evidence ────────
-          These are the actual measurements that produced the status above.
-          Three equal columns — all are relevant on Recovery.
-      ─────────────────────────────────────────────────────────────────────── */}
-      {hasVitals && (
-        <div className={cn(
-          'grid gap-8',
-          [hrvValue != null, sleepH != null, rhrValue != null].filter(Boolean).length === 3
-            ? 'grid-cols-3'
-            : [hrvValue != null, sleepH != null, rhrValue != null].filter(Boolean).length === 2
-              ? 'grid-cols-2'
-              : 'grid-cols-1'
-        )}>
-          {hrvValue != null && (
+      {/* ═══════════════════════════════════════════════════════════════════
+          ZONE 3 — Light Graphite / Charts with summaries
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="bg-[#EDEDEB] dark:bg-zinc-900/80 px-6 sm:px-10 lg:px-14 py-10 space-y-12">
+
+        {/* Sleep chart */}
+        <div>
+          <div className="flex items-start justify-between mb-5">
             <div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-4xl font-black text-gray-900 dark:text-zinc-50 tabular-nums leading-none">
-                  {hrvValue}
-                </span>
-                <span className="text-sm text-gray-400 dark:text-zinc-500">ms</span>
-              </div>
-              {TREND_LABEL[hrvTrendKey].text && (
-                <p className={cn('text-xs mt-1', TREND_LABEL[hrvTrendKey].cls)}>
-                  {TREND_LABEL[hrvTrendKey].text}
-                </p>
-              )}
-              <div className="flex items-center gap-0.5 mt-1.5">
-                <span className="text-xs text-gray-400 dark:text-zinc-500">HRV</span>
-                <MetricInfo slug="hrv" />
-              </div>
-            </div>
-          )}
-          {sleepH != null && (
-            <div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-4xl font-black text-gray-900 dark:text-zinc-50 tabular-nums leading-none">
-                  {sleepH.toFixed(1)}
-                </span>
-                <span className="text-sm text-gray-400 dark:text-zinc-500">h</span>
-              </div>
-              {TREND_LABEL[sleepTrendKey].text && (
-                <p className={cn('text-xs mt-1', TREND_LABEL[sleepTrendKey].cls)}>
-                  {TREND_LABEL[sleepTrendKey].text}
-                </p>
-              )}
-              <div className="flex items-center gap-0.5 mt-1.5">
-                <span className="text-xs text-gray-400 dark:text-zinc-500">Sleep</span>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Sleep · 14 days</span>
                 <MetricInfo slug="sleep" />
               </div>
-            </div>
-          )}
-          {rhrValue != null && (
-            <div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-4xl font-black text-gray-900 dark:text-zinc-50 tabular-nums leading-none">
-                  {rhrValue}
-                </span>
-                <span className="text-sm text-gray-400 dark:text-zinc-500">bpm</span>
-              </div>
-              {TREND_LABEL[rhrTrendKey].text && (
-                <p className={cn('text-xs mt-1', TREND_LABEL[rhrTrendKey].cls)}>
-                  {TREND_LABEL[rhrTrendKey].text}
-                </p>
-              )}
-              <div className="flex items-center gap-0.5 mt-1.5">
-                <span className="text-xs text-gray-400 dark:text-zinc-500">Resting HR</span>
-                <MetricInfo slug="resting-heart-rate" />
+              {/* Summary */}
+              <div className="flex gap-4 text-xs text-[#888888]">
+                {sleepH != null && (
+                  <span>Current: <span className="font-semibold text-[#0D0D0D] dark:text-zinc-200">{sleepH}h</span></span>
+                )}
+                {avg14dSleep && (
+                  <span>14d avg: <span className="font-semibold text-[#0D0D0D] dark:text-zinc-200">{avg14dSleep}h</span></span>
+                )}
+                {TREND_LABEL[sleepTrendKey].text && (
+                  <span className={cn('font-semibold', TREND_LABEL_LIGHT[sleepTrendKey])}>
+                    {TREND_LABEL[sleepTrendKey].text}
+                  </span>
+                )}
               </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* ── RECOVERY SCORE — footnote, exists but does not dominate ──────────
-          The score supports interpretation. It is not the lead.
-      ─────────────────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-t border-gray-200 dark:border-zinc-800 pt-4">
-        <span className="text-sm text-gray-400 dark:text-zinc-500">Recovery score</span>
-        <span className="text-sm font-semibold text-gray-700 dark:text-zinc-300 tabular-nums">
-          {recovery.score} / 100
-        </span>
-        <MetricInfo slug="recovery-score" />
-      </div>
-
-      {/* ── 7-day averages ───────────────────────────────────────────────────── */}
-      {(avg7dSleep || avg7dHrv || avg7dRhr) && (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 -mt-4">
-          {avg7dSleep && (
-            <p className="text-xs text-gray-400 dark:text-zinc-500">
-              7d sleep: <span className="font-semibold text-gray-700 dark:text-zinc-300">{avg7dSleep}h</span>
-            </p>
-          )}
-          {avg7dHrv && (
-            <p className="text-xs text-gray-400 dark:text-zinc-500">
-              7d HRV: <span className="font-semibold text-gray-700 dark:text-zinc-300">{avg7dHrv} ms</span>
-            </p>
-          )}
-          {avg7dRhr && (
-            <p className="text-xs text-gray-400 dark:text-zinc-500">
-              7d RHR: <span className="font-semibold text-gray-700 dark:text-zinc-300">{avg7dRhr} bpm</span>
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* ── TREND CHARTS — 14-day context ───────────────────────────────────── */}
-      <div className="space-y-10">
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Sleep</span>
-              <span className="text-xs text-gray-400 dark:text-zinc-500">14 days</span>
-              <MetricInfo slug="sleep" />
-            </div>
-            <div className="flex items-center gap-2.5 text-[10px] text-gray-400 dark:text-zinc-500">
+            <div className="flex items-center gap-3 text-[10px] text-[#888888] flex-shrink-0 ml-4">
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-400 inline-block" /> ≥7h</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-400 inline-block" /> 6–7h</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-400 inline-block" /> &lt;6h</span>
@@ -291,22 +311,59 @@ export default async function RecoveryPage() {
           <SleepChart data={sleepData} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        {/* HRV + RHR */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+
+          {/* HRV */}
           <div>
-            <div className="flex items-center gap-1.5 mb-4">
-              <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">HRV</span>
-              <span className="text-xs text-gray-400 dark:text-zinc-500">14 days</span>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">HRV · 14 days</span>
               <MetricInfo slug="hrv" />
             </div>
-            <HrvChart data={hrvData} />
+            <div className="flex gap-4 text-xs text-[#888888] mb-5">
+              {hrvValue != null && (
+                <span>Current: <span className="font-semibold text-[#0D0D0D] dark:text-zinc-200">{hrvValue} ms</span></span>
+              )}
+              {avg14dHrv && (
+                <span>14d avg: <span className="font-semibold text-[#0D0D0D] dark:text-zinc-200">{avg14dHrv} ms</span></span>
+              )}
+              {TREND_LABEL[hrvTrendKey].text && (
+                <span className={cn('font-semibold', TREND_LABEL_LIGHT[hrvTrendKey])}>
+                  {TREND_LABEL[hrvTrendKey].text}
+                </span>
+              )}
+            </div>
+            {hrvData.some(d => d.hrv != null) ? (
+              <HrvChart data={hrvData} />
+            ) : (
+              <p className="text-sm text-[#888888] py-8">No recent HRV data</p>
+            )}
           </div>
+
+          {/* Resting HR */}
           <div>
-            <div className="flex items-center gap-1.5 mb-4">
-              <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Resting HR</span>
-              <span className="text-xs text-gray-400 dark:text-zinc-500">14 days</span>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Resting HR · 14 days</span>
               <MetricInfo slug="resting-heart-rate" />
             </div>
-            <RestingHrChart data={rhrData} />
+            <div className="flex gap-4 text-xs text-[#888888] mb-5">
+              {rhrValue != null && (
+                <span>Current: <span className="font-semibold text-[#0D0D0D] dark:text-zinc-200">{rhrValue} bpm</span></span>
+              )}
+              {avg14dRhr && (
+                <span>14d avg: <span className="font-semibold text-[#0D0D0D] dark:text-zinc-200">{avg14dRhr} bpm</span></span>
+              )}
+              {TREND_LABEL[rhrTrendKey].text && (
+                <span className={cn('font-semibold', TREND_LABEL_LIGHT[rhrTrendKey])}>
+                  {TREND_LABEL[rhrTrendKey].text}
+                </span>
+              )}
+            </div>
+            {rhrData.some(d => d.rhr != null) ? (
+              <RestingHrChart data={rhrData} />
+            ) : (
+              <p className="text-sm text-[#888888] py-8">No recent resting HR data</p>
+            )}
           </div>
         </div>
       </div>
