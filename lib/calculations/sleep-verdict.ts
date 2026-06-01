@@ -51,9 +51,11 @@ export function getSleepVerdict(record: SleepRecord | null): SleepVerdict {
   // Determine verdict
   let key: SleepVerdictKey = 'ok'
 
-  if ((wakes != null && wakes > 6) || (eff != null && eff < 75) || (awake != null && awake > 60)) {
+  // Apple Watch wake_count counts micro-arousals; 7-12/night is normal.
+  // Only mark disrupted on efficiency <75% OR awake time >60 min.
+  if ((eff != null && eff < 75) || (awake != null && awake > 60)) {
     key = 'disrupted'
-  } else if (h >= 7.5 && wakes != null && wakes > 5) {
+  } else if (h >= 7.5 && wakes != null && wakes > 12) {
     key = 'long_fragmented'
   } else if (h < 6 && eff != null && eff >= 85) {
     key = 'short_efficient'

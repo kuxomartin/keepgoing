@@ -37,7 +37,7 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
-export function SleepChart({ data }: { data: SleepChartPoint[] }) {
+export function SleepChart({ data, maxHours = 10 }: { data: SleepChartPoint[]; maxHours?: number }) {
   // Only show days with actual data
   const hasData = data.some(d => d.hours != null && d.hours > 0)
 
@@ -68,15 +68,15 @@ export function SleepChart({ data }: { data: SleepChartPoint[] }) {
           interval="preserveStartEnd"
         />
         <YAxis
-          domain={[0, 10]}
-          ticks={[4, 6, 7, 8, 10]}
+          domain={[0, maxHours]}
+          ticks={maxHours <= 2 ? [0, 0.5, 1, 1.5, 2] : [4, 6, 7, 8, 10]}
           tickFormatter={(v) => `${v}h`}
           tick={{ fontSize: 11, fill: '#888888' }}
           axisLine={false}
           tickLine={false}
           width={32}
         />
-        <ReferenceLine y={7} stroke="#D9D9D9" strokeDasharray="4 4" strokeWidth={1.5} />
+        {maxHours > 2 && <ReferenceLine y={7} stroke="#D9D9D9" strokeDasharray="4 4" strokeWidth={1.5} />}
         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
         <Bar dataKey="hours" radius={[3, 3, 0, 0]}>
           {chartData.map((entry, index) => (
