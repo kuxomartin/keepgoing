@@ -103,8 +103,16 @@ function parseFlexibleDateTime(raw: string): string | null {
 
 function parseNum(raw: string | undefined): number | null {
   if (!raw || raw.trim() === '' || raw.trim() === '-') return null
-  const cleaned = raw.trim().replace(/,/g, '')
-  const n = parseFloat(cleaned)
+  let s = raw.trim()
+  // European decimal: "15,1" → 15.1 (single comma, no dot = decimal separator)
+  const commas = (s.match(/,/g) ?? []).length
+  const dots   = (s.match(/\./g) ?? []).length
+  if (commas === 1 && dots === 0) {
+    s = s.replace(',', '.')
+  } else {
+    s = s.replace(/,/g, '')
+  }
+  const n = parseFloat(s)
   return isNaN(n) ? null : n
 }
 
