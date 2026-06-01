@@ -45,7 +45,8 @@ export function WakeCountChart({ data }: { data: DataPoint[] }) {
         <Bar dataKey="value" radius={[2, 2, 0, 0]}>
           {chartData.map((entry, i) => {
             const v = entry.value
-            const color = v == null ? 'transparent' : v <= 3 ? '#16A34A' : v <= 6 ? '#D97706' : '#E5173F'
+            // Warm monochrome — lower wake count is better
+            const color = v == null ? 'transparent' : v <= 5 ? '#5C4A3A' : v <= 10 ? '#C4892A' : '#E5173F'
             return <Cell key={i} fill={color} />
           })}
         </Bar>

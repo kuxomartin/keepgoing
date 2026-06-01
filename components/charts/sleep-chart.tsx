@@ -18,10 +18,11 @@ export interface SleepChartPoint {
   hours: number | null
 }
 
+// Warm monochrome — no blue/amber/Apple Health colors
 function barColor(hours: number) {
-  if (hours >= 7) return '#60a5fa'
-  if (hours >= 6) return '#fbbf24'
-  return '#f87171'
+  if (hours >= 7) return '#5C4A3A'  // warm brown — adequate/good
+  if (hours >= 6) return '#C4892A'  // muted ochre — caution
+  return '#E5173F'                  // signal red — short
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

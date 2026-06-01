@@ -74,11 +74,12 @@ export function SleepEfficiencyChart({
         <Bar dataKey="value" radius={[2, 2, 0, 0]}>
           {chartData.map((entry, i) => {
             const v = entry.value
+            // Warm monochrome palette
             const color = v == null
               ? 'transparent'
               : higherIsBetter
-                ? v >= goodThreshold ? '#16A34A' : v >= goodThreshold - 10 ? '#D97706' : '#E5173F'
-                : v <= goodThreshold ? '#16A34A' : v <= goodThreshold + 3 ? '#D97706' : '#E5173F'
+                ? v >= goodThreshold ? '#5C4A3A' : v >= goodThreshold - 10 ? '#C4892A' : '#E5173F'
+                : v <= goodThreshold ? '#5C4A3A' : v <= goodThreshold + 3  ? '#C4892A' : '#E5173F'
             return <Cell key={i} fill={color} />
           })}
         </Bar>

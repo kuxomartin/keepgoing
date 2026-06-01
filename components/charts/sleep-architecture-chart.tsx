@@ -2,34 +2,49 @@
 
 import { formatMinutes } from '@/lib/calculations/sleep-verdict'
 
-interface SleepArchitectureChartProps {
+interface Props {
   deep: number | null
   core: number | null
   rem: number | null
   awake: number | null
+  inBed?: number | null
+  asleep?: number | null
 }
 
+// Warm monochrome — no Apple Health rainbow
 const SEGMENTS = [
-  { key: 'deep'  as const, label: 'Deep',  color: '#1D4ED8', lightColor: '#DBEAFE' },
-  { key: 'core'  as const, label: 'Core',  color: '#60A5FA', lightColor: '#EFF6FF' },
-  { key: 'rem'   as const, label: 'REM',   color: '#7C3AED', lightColor: '#EDE9FE' },
-  { key: 'awake' as const, label: 'Awake', color: '#D97706', lightColor: '#FEF3C7' },
+  { key: 'deep'  as const, label: 'Deep',  color: '#2C1810' },  // near black / dark brown
+  { key: 'core'  as const, label: 'Core',  color: '#8C7B70' },  // taupe / warm gray
+  { key: 'rem'   as const, label: 'REM',   color: '#C49A8A' },  // muted dusty rose
+  { key: 'awake' as const, label: 'Awake', color: '#E0D5CC' },  // warm stone (light)
 ]
 
-export function SleepArchitectureChart({ deep, core, rem, awake }: SleepArchitectureChartProps) {
+export function SleepArchitectureChart({ deep, core, rem, awake, inBed, asleep }: Props) {
   const values: Record<string, number | null> = { deep, core, rem, awake }
   const total = SEGMENTS.reduce((s, seg) => s + (values[seg.key] ?? 0), 0)
 
   if (total === 0) {
-    return <p className="text-sm text-[#888888]">No sleep stage data available.</p>
+    return <p className="text-sm text-[#888888]">No sleep stage breakdown available.</p>
   }
 
   const active = SEGMENTS.filter(s => (values[s.key] ?? 0) > 0)
 
   return (
     <div>
+      {/* Optional summary line */}
+      {(asleep != null || inBed != null) && (
+        <div className="flex gap-6 text-xs text-[#888888] mb-5">
+          {asleep != null && (
+            <span>Asleep <span className="font-semibold text-[#0D0D0D] dark:text-zinc-200">{formatMinutes(asleep)}</span></span>
+          )}
+          {inBed != null && (
+            <span>In bed <span className="font-semibold text-[#0D0D0D] dark:text-zinc-200">{formatMinutes(inBed)}</span></span>
+          )}
+        </div>
+      )}
+
       {/* Stacked bar */}
-      <div className="h-8 flex rounded-sm overflow-hidden gap-px">
+      <div className="h-7 flex rounded-sm overflow-hidden gap-[2px]">
         {active.map(seg => {
           const mins = values[seg.key]!
           const pct  = ((mins / total) * 100).toFixed(2)
@@ -44,7 +59,7 @@ export function SleepArchitectureChart({ deep, core, rem, awake }: SleepArchitec
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-x-5 gap-y-2 mt-4">
+      <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4">
         {active.map(seg => (
           <div key={seg.key} className="flex items-center gap-2">
             <div
@@ -59,14 +74,6 @@ export function SleepArchitectureChart({ deep, core, rem, awake }: SleepArchitec
             </span>
           </div>
         ))}
-        <div className="flex items-center gap-2 ml-auto">
-          <span className="text-xs text-[#888888]">
-            Total in bed{' '}
-            <span className="font-semibold text-[#0D0D0D] dark:text-zinc-200">
-              {formatMinutes(total)}
-            </span>
-          </span>
-        </div>
       </div>
     </div>
   )
