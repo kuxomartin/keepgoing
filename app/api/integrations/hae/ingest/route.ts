@@ -235,18 +235,33 @@ function processWorkouts(
       (typeof workout.type === 'string' && workout.type) ||
       ''
 
+    // Workout name for keyword inference (used as last resort below)
+    const workoutName = typeof workout.name === 'string' ? workout.name.toLowerCase() : ''
+
     const activityType = (() => {
-      if (!rawType) return 'other'
-      // 1. Direct match (full HK constant or already-short name)
-      if (WORKOUT_TYPE_MAP[rawType]) return WORKOUT_TYPE_MAP[rawType]
-      // 2. Strip "HKWorkoutActivityType" prefix and retry
-      const stripped = rawType.replace(/^HKWorkoutActivityType/, '')
-      if (WORKOUT_TYPE_MAP[stripped]) return WORKOUT_TYPE_MAP[stripped]
-      // 3. Case-insensitive fallback on the stripped form
-      const lc = stripped.toLowerCase()
-      for (const [key, val] of Object.entries(WORKOUT_TYPE_MAP)) {
-        if (key.replace(/^HKWorkoutActivityType/, '').toLowerCase() === lc) return val
+      if (rawType) {
+        // 1. Direct match (full HK constant or already-short name)
+        if (WORKOUT_TYPE_MAP[rawType]) return WORKOUT_TYPE_MAP[rawType]
+        // 2. Strip "HKWorkoutActivityType" prefix and retry
+        const stripped = rawType.replace(/^HKWorkoutActivityType/, '')
+        if (WORKOUT_TYPE_MAP[stripped]) return WORKOUT_TYPE_MAP[stripped]
+        // 3. Case-insensitive fallback on the stripped form
+        const lc = stripped.toLowerCase()
+        for (const [key, val] of Object.entries(WORKOUT_TYPE_MAP)) {
+          if (key.replace(/^HKWorkoutActivityType/, '').toLowerCase() === lc) return val
+        }
       }
+      // 4. Name-based keyword inference — handles localised workout names (Slovak,
+      //    Czech, German, etc.) when workoutActivityType is absent from the payload.
+      if (workoutName.match(/cykl|cycl|bike|bik|bicykel|fahrrad|велосипед/))  return 'cycling'
+      if (workoutName.match(/run|beh|jogg|lauf|бег/))                          return 'running'
+      if (workoutName.match(/walk|chôdz|gehen|ходьба/))                        return 'walking'
+      if (workoutName.match(/hike|túra|wander|поход/))                         return 'hiking'
+      if (workoutName.match(/swim|plávanie|schwimm|плавание/))                 return 'swimming'
+      if (workoutName.match(/yoga/))                                            return 'yoga'
+      if (workoutName.match(/strength|strength|silový|kraft/))                 return 'strength'
+      if (workoutName.match(/golf/))                                            return 'golf'
+      if (workoutName.match(/badminton/))                                       return 'badminton'
       return 'other'
     })()
 
