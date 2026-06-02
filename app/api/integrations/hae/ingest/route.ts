@@ -326,7 +326,32 @@ function processWorkouts(
     })
   }
 
-  return { rows, skipped }
+  // ── Deduplicate by start_time ───────────────────────────────────────────────
+  // Apple Health can hold multiple workout entries for the same physical event
+  // (e.g. Apple Watch + a third-party app both syncing). HAE exports all of them
+  // with different UUIDs, which would create duplicate DB rows.
+  // Keep one row per start_time: prefer non-'other' type, then longer duration.
+  const deduped = new Map<string, Record<string, unknown>>()
+  for (const row of rows) {
+    const key = row.start_time as string
+    const existing = deduped.get(key)
+    if (!existing) { deduped.set(key, row); continue }
+    const existingIsOther = existing.activity_type === 'other'
+    const newIsOther      = row.activity_type === 'other'
+    if (existingIsOther && !newIsOther) {
+      deduped.set(key, row)   // new row has a real type — prefer it
+    } else if (!existingIsOther && newIsOther) {
+      // keep existing (already has a real type)
+    } else {
+      // Both same quality — prefer longer duration (more data)
+      const existDur = (existing.duration_minutes as number | null) ?? 0
+      const newDur   = (row.duration_minutes     as number | null) ?? 0
+      if (newDur > existDur) deduped.set(key, row)
+    }
+    skipped++
+  }
+
+  return { rows: [...deduped.values()], skipped }
 }
 
 // ── Sleep analysis processor ──────────────────────────────────────────────────
