@@ -9,6 +9,7 @@ import { SleepChart } from '@/components/charts/sleep-chart'
 import { SleepArchitectureChart } from '@/components/charts/sleep-architecture-chart'
 import { SleepEfficiencyChart } from '@/components/charts/sleep-efficiency-chart'
 import { WakeCountChart } from '@/components/charts/wake-count-chart'
+import { SleepStageHistoryChart } from '@/components/charts/sleep-stage-history-chart'
 import {
   getSleepVerdict,
   analyzeSleepCauses,
@@ -214,10 +215,9 @@ export default async function SleepPage() {
   return (
     <div className="flex flex-col bg-[#151A20]">
 
-      {/* ══ ZONE 1 — Hero (dark) ═══════════════════════════════════════════════ */}
+      {/* ══ ZONE 1 — Hero ════════════════════════════════════════════════════ */}
       <div className="pt-10 pb-10">
         <Container>
-          {/* Date label */}
           <div className="flex items-center gap-3 mb-6">
             <span className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em]">Sleep</span>
             {latestDate && (
@@ -236,7 +236,6 @@ export default async function SleepPage() {
             </div>
           ) : (
             <>
-              {/* Verdict — 100px */}
               <h1
                 className={cn('font-display font-bold mb-10', verdictCls(verdict.key))}
                 style={{ fontSize: 'clamp(3.5rem, 7vw, 7rem)', lineHeight: 0.9, letterSpacing: '-0.03em', maxWidth: '900px' }}
@@ -244,33 +243,43 @@ export default async function SleepPage() {
                 {verdict.text}
               </h1>
 
-              {/* Key facts — large, tight, horizontal */}
-              {verdict.facts.length > 0 && (
-                <div className="flex flex-wrap gap-x-12 gap-y-6">
-                  {verdict.facts.map(fact => (
-                    <div key={fact.label}>
-                      <div
-                        className="font-bold text-white font-mono tabular-nums leading-none"
-                        style={{ fontSize: '2.25rem' }}
-                      >
-                        {fact.value}
+              {verdict.facts.length > 0 && (() => {
+                const [first, ...rest] = verdict.facts
+                const validTimes = latest?.start_time && latest?.end_time &&
+                  new Date(latest.start_time).getFullYear() >= 2000 &&
+                  new Date(latest.end_time).getFullYear() >= 2000
+
+                return (
+                  <div className="flex flex-wrap gap-x-12 gap-y-6">
+                    {/* Duration — primary, with time window directly below */}
+                    <div>
+                      <div className="font-bold text-white font-mono tabular-nums leading-none" style={{ fontSize: '2.25rem' }}>
+                        {first.value}
                       </div>
                       <div className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.14em] mt-2">
-                        {fact.label}
+                        {first.label}
                       </div>
+                      {validTimes && (
+                        <div className="mt-2">
+                          <SleepTimeRange startIso={latest!.start_time!} endIso={latest!.end_time!} />
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
 
-              {/* Sleep window — local time (client-formatted to avoid UTC display) */}
-              {latest?.start_time && latest?.end_time &&
-               new Date(latest.start_time).getFullYear() >= 2000 &&
-               new Date(latest.end_time).getFullYear() >= 2000 && (
-                <div className="mt-5">
-                  <SleepTimeRange startIso={latest.start_time} endIso={latest.end_time} />
-                </div>
-              )}
+                    {/* Remaining facts */}
+                    {rest.map(fact => (
+                      <div key={fact.label}>
+                        <div className="font-bold text-white font-mono tabular-nums leading-none" style={{ fontSize: '2.25rem' }}>
+                          {fact.value}
+                        </div>
+                        <div className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.14em] mt-2">
+                          {fact.label}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </>
           )}
         </Container>
@@ -348,249 +357,356 @@ export default async function SleepPage() {
             </div>
           )}
 
-          {/* ══ ZONE 3 — Sleep Architecture (dark, flagship visualization) ════════ */}
-          {latest && (latest.deep_minutes || latest.core_minutes || latest.rem_minutes || latest.awake_minutes) && (
-            <div className="border-t border-white/[0.06] pt-10 pb-12">
-              <Container>
-                <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-8">
-                  Sleep Architecture — Last Night
+          {/* ══ SECTION 1 — Sleep Duration & Timing ═════════════════════════════ */}
+          <div className="border-t border-white/[0.06] bg-[#20252B]">
+            <Container className="py-12">
+              <div className="mb-8">
+                <p className="text-[10px] font-semibold text-[#888888] uppercase tracking-[0.18em] mb-1">
+                  Sleep Duration &amp; Timing
                 </p>
-                <SleepArchitectureChart
-                  deep={latest.deep_minutes}
-                  core={latest.core_minutes}
-                  rem={latest.rem_minutes}
-                  awake={latest.awake_minutes}
-                  inBed={latest.in_bed_minutes}
-                  asleep={latest.asleep_minutes}
-                />
-
-                {/* Reference ranges — compact, cautious language */}
-                {(() => {
-                  const archTotal = (latest.deep_minutes ?? 0) + (latest.core_minutes ?? 0) +
-                    (latest.rem_minutes ?? 0) + (latest.awake_minutes ?? 0)
-                  if (!archTotal) return null
-
-                  const pct = (m: number | null) => m ? Math.round((m / archTotal) * 100) : null
-
-                  const stages = [
-                    {
-                      label: 'Deep',
-                      minutes: latest.deep_minutes,
-                      pct: pct(latest.deep_minutes),
-                      ref: '~10–20%',
-                      assess: (p: number) => p < 10 ? 'low-normal' : p <= 20 ? 'typical' : 'above typical',
-                    },
-                    {
-                      label: 'REM',
-                      minutes: latest.rem_minutes,
-                      pct: pct(latest.rem_minutes),
-                      ref: '~20–25%',
-                      assess: (p: number) => p < 15 ? 'below typical' : p < 20 ? 'slightly below' : p <= 25 ? 'typical' : p <= 30 ? 'slightly above' : 'above typical',
-                    },
-                    {
-                      label: 'Core',
-                      minutes: latest.core_minutes,
-                      pct: pct(latest.core_minutes),
-                      ref: 'majority',
-                      assess: (p: number) => p >= 40 ? 'typical (largest stage)' : 'lower than typical',
-                    },
-                    {
-                      label: 'Awake',
-                      minutes: latest.awake_minutes,
-                      pct: pct(latest.awake_minutes),
-                      ref: 'lower is better',
-                      assess: (p: number) => p < 5 ? 'low — good' : p < 10 ? 'typical' : 'elevated',
-                    },
-                  ].filter(s => s.minutes != null && s.minutes > 0)
-
-                  return (
-                    <div className="mt-10 border-t border-white/[0.08] pt-8">
-                      <p className="text-xs font-bold text-white/50 uppercase tracking-[0.15em] mb-6">
-                        Stage breakdown · typical adult ranges
-                      </p>
-                      <div className="space-y-4">
-                        {stages.map(s => {
-                          const assessment = s.pct != null ? s.assess(s.pct) : null
-                          const isNote = assessment && (assessment.includes('below') || assessment.includes('elevated') || assessment.includes('above'))
-                          return (
-                            <div key={s.label} className="flex items-baseline gap-4">
-                              <span className="text-white/60 w-14 flex-shrink-0 text-sm font-medium">{s.label}</span>
-                              <span className="font-mono text-white/80 w-16 flex-shrink-0 text-sm">{s.minutes ? formatMinutes(s.minutes) : '—'}</span>
-                              <span className="text-white/50 w-10 flex-shrink-0 font-mono tabular-nums text-sm">{s.pct != null ? `${s.pct}%` : ''}</span>
-                              <span className="text-white/35 text-xs w-28 flex-shrink-0">{s.ref}</span>
-                              {assessment && (
-                                <span className={isNote ? 'text-[#FFB000] text-sm font-medium' : 'text-white/40 text-sm'}>
-                                  {assessment}
-                                </span>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <p className="text-xs text-white/30 mt-5">
-                        Apple Watch sleep stage estimates are approximate. Typical ranges vary by age and individual.
-                      </p>
-                    </div>
-                  )
-                })()}
-              </Container>
-            </div>
-          )}
-
-          {/* ══ ZONE 3b — Sleep Debt + Consistency ═══════════════════════════════ */}
-          {(sleepDebt != null || consistency != null) && (
-            <div className="border-t border-white/[0.06] pt-10 pb-12">
-              <Container>
-                <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-8">
-                  Sleep Analysis
-                </p>
-                <div className={cn(
-                  'grid gap-4',
-                  sleepDebt && consistency ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-2xl'
-                )}>
-
-                  {/* Sleep Debt card */}
-                  {sleepDebt && (
-                    <div className="bg-[#272D35] border border-white/[0.06]">
-                      <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
-                        <h3 className="font-bold text-white uppercase leading-tight"
-                            style={{ fontSize: '1.25rem', letterSpacing: '-0.01em' }}>
-                          Sleep Debt
-                        </h3>
-                      </div>
-                      <div className="px-7 py-6 grid grid-cols-2 gap-x-8 gap-y-5 border-b border-white/[0.06]">
-                        <div>
-                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Average sleep</p>
-                          <p className="font-mono text-2xl font-bold text-white font-mono tabular-nums">{sleepDebt.avgHours}h</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Target</p>
-                          <p className="font-mono text-2xl font-bold text-white font-mono tabular-nums">{sleepDebt.targetHours}h</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Daily deficit</p>
-                          <p className={cn(
-                            'font-mono text-2xl font-bold font-mono tabular-nums',
-                            sleepDebt.dailyDeficitHours > 0.5 ? 'text-[#E5173F]'
-                              : sleepDebt.dailyDeficitHours > 0.1 ? 'text-[#FFB000]'
-                              : 'text-white'
-                          )}>
-                            {sleepDebt.dailyDeficitHours > 0 ? `-${sleepDebt.dailyDeficitHours}h` : 'None'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Est. accumulated</p>
-                          <p className={cn(
-                            'font-mono text-2xl font-bold font-mono tabular-nums',
-                            sleepDebt.accumulatedDebtHours > 5 ? 'text-[#E5173F]'
-                              : sleepDebt.accumulatedDebtHours > 2 ? 'text-[#FFB000]'
-                              : 'text-white'
-                          )}>
-                            {sleepDebt.accumulatedDebtHours > 0 ? `~${sleepDebt.accumulatedDebtHours}h` : 'None'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="px-7 py-5">
-                        <p className="text-sm text-white/50 leading-relaxed">{sleepDebt.interpretation}</p>
-                        <p className="text-[10px] text-white/20 mt-3">{sleepDebt.nightsAnalyzed} nights analysed · last 14 days</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Consistency card */}
-                  {consistency && (
-                    <div className="bg-[#272D35] border border-white/[0.06]">
-                      <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
-                        <div className="flex items-start justify-between gap-4">
-                          <h3 className="font-bold text-white uppercase leading-tight"
-                              style={{ fontSize: '1.25rem', letterSpacing: '-0.01em' }}>
-                            Consistency
-                          </h3>
-                          <span className={cn(
-                            'text-[10px] font-black uppercase tracking-[0.2em] flex-shrink-0 mt-0.5',
-                            consistency.rating === 'highly consistent' ? 'text-white/60'
-                              : consistency.rating === 'moderately consistent' ? 'text-[#FFB000]'
-                              : 'text-[#E5173F]'
-                          )}>
-                            {consistency.rating}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="px-7 py-6 grid grid-cols-2 gap-x-8 gap-y-5 border-b border-white/[0.06]">
-                        <div>
-                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Bedtime spread</p>
-                          <p className={cn(
-                            'font-mono text-2xl font-bold font-mono tabular-nums',
-                            consistency.bedtimeSpreadMin > 60 ? 'text-[#E5173F]'
-                              : consistency.bedtimeSpreadMin > 30 ? 'text-[#FFB000]'
-                              : 'text-white'
-                          )}>
-                            {consistency.bedtimeSpread}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Wake time spread</p>
-                          <p className={cn(
-                            'font-mono text-2xl font-bold font-mono tabular-nums',
-                            consistency.wakeSpreadMin > 60 ? 'text-[#E5173F]'
-                              : consistency.wakeSpreadMin > 30 ? 'text-[#FFB000]'
-                              : 'text-white'
-                          )}>
-                            {consistency.wakeSpread}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="px-7 py-5">
-                        <p className="text-sm text-white/50 leading-relaxed">{consistency.interpretation}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Container>
-            </div>
-          )}
-
-          {/* ══ ZONE 3c — Sleep Intelligence ══════════════════════════════════════ */}
-          {intelligenceInsights.length > 0 && (
-            <div className="border-t border-white/[0.06] pt-10 pb-12">
-              <Container>
-                <div className="mb-8">
-                  <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-3">
-                    Sleep Intelligence
+                {records14.filter(r => r.asleep_minutes != null).length < 7 && (
+                  <p className="text-xs text-[#888888] mt-1">
+                    {records14.filter(r => r.asleep_minutes != null).length} nights recorded.
                   </p>
-                  <h2 className="font-black text-white text-2xl sm:text-3xl" style={{ lineHeight: 1.0 }}>
-                    Correlations from your data.
-                  </h2>
-                  <p className="text-sm text-white/35 mt-2">Association only — not causal. Requires sufficient nights recorded.</p>
+                )}
+              </div>
+
+              <div className="space-y-10">
+                {/* Duration trend */}
+                <div>
+                  <div className="flex items-baseline gap-6 mb-4">
+                    <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Sleep Duration</p>
+                    <div className="flex gap-5 text-xs text-[#888888]">
+                      {latest?.asleep_minutes != null && (
+                        <span>Last: <span className="font-semibold text-[#E7EDF2]">{formatMinutes(latest.asleep_minutes)}</span></span>
+                      )}
+                      {avg14Duration && (
+                        <span>14d avg: <span className="font-semibold text-[#E7EDF2]">{avg14Duration}h</span></span>
+                      )}
+                      {trendLabel(durationTrend).text && (
+                        <span className={cn('font-semibold', trendLabel(durationTrend).cls)}>
+                          {trendLabel(durationTrend).text}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <SleepChart data={durationData} chartHeight={200} onDark />
                 </div>
 
-                <div className={cn(
-                  'grid gap-4',
-                  intelligenceInsights.length === 1 ? 'grid-cols-1 max-w-2xl' : 'grid-cols-1 lg:grid-cols-2'
-                )}>
-                  {intelligenceInsights.map(insight => (
-                    <div key={insight.id} className="bg-[#272D35] border border-white/[0.06]">
-                      <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
-                        <h3 className="font-bold text-white leading-tight"
-                            style={{ fontSize: '1.125rem', letterSpacing: '-0.01em' }}>
-                          {insight.title}
-                        </h3>
-                        <p className="font-mono text-[10px] text-white/30 mt-2">{insight.comparison}</p>
+                {/* Sleep debt + Timing variability side by side */}
+                {(sleepDebt != null || consistency != null) && (
+                  <div className={cn(
+                    'grid gap-4',
+                    sleepDebt && consistency ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-2xl'
+                  )}>
+                    {sleepDebt && (
+                      <div className="bg-[#272D35] border border-white/[0.06]">
+                        <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
+                          <h3 className="font-bold text-white uppercase leading-tight" style={{ fontSize: '1.125rem', letterSpacing: '-0.01em' }}>
+                            Sleep Debt
+                          </h3>
+                        </div>
+                        <div className="px-7 py-5 grid grid-cols-2 gap-x-8 gap-y-4 border-b border-white/[0.06]">
+                          <div>
+                            <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Avg / Target</p>
+                            <p className="font-mono text-xl font-bold text-white">
+                              {sleepDebt.avgHours}h
+                              <span className="text-white/30 text-sm font-normal"> / {sleepDebt.targetHours}h</span>
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Accumulated</p>
+                            <p className={cn('font-mono text-xl font-bold',
+                              sleepDebt.accumulatedDebtHours > 5 ? 'text-[#E5173F]'
+                                : sleepDebt.accumulatedDebtHours > 2 ? 'text-[#FFB000]' : 'text-white'
+                            )}>
+                              {sleepDebt.accumulatedDebtHours > 0 ? `~${sleepDebt.accumulatedDebtHours}h` : 'None'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="px-7 py-5">
+                          <p className="text-sm text-white/50 leading-relaxed">{sleepDebt.interpretation}</p>
+                          <p className="text-[10px] text-white/20 mt-2">{sleepDebt.nightsAnalyzed} nights · last 14 days</p>
+                        </div>
                       </div>
-                      <div className="px-7 py-5 border-b border-white/[0.06]">
-                        <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1.5">Observed difference</p>
-                        <p className="font-bold text-white text-sm">{insight.difference}</p>
+                    )}
+
+                    {consistency && (
+                      <div className="bg-[#272D35] border border-white/[0.06]">
+                        <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
+                          <div className="flex items-start justify-between gap-3">
+                            <h3 className="font-bold text-white uppercase leading-tight" style={{ fontSize: '1.125rem', letterSpacing: '-0.01em' }}>
+                              Timing Variability
+                            </h3>
+                            <span className={cn('text-[10px] font-black uppercase tracking-[0.18em] flex-shrink-0 mt-0.5',
+                              consistency.rating === 'highly consistent' ? 'text-white/50'
+                                : consistency.rating === 'moderately consistent' ? 'text-[#FFB000]'
+                                : 'text-[#E5173F]'
+                            )}>
+                              {consistency.rating}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="px-7 py-5 grid grid-cols-2 gap-x-8 gap-y-4 border-b border-white/[0.06]">
+                          <div>
+                            <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Bedtime spread</p>
+                            <p className={cn('font-mono text-xl font-bold',
+                              consistency.bedtimeSpreadMin > 60 ? 'text-[#E5173F]'
+                                : consistency.bedtimeSpreadMin > 30 ? 'text-[#FFB000]' : 'text-white'
+                            )}>
+                              {consistency.bedtimeSpread}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Wake time spread</p>
+                            <p className={cn('font-mono text-xl font-bold',
+                              consistency.wakeSpreadMin > 60 ? 'text-[#E5173F]'
+                                : consistency.wakeSpreadMin > 30 ? 'text-[#FFB000]' : 'text-white'
+                            )}>
+                              {consistency.wakeSpread}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="px-7 py-5">
+                          <p className="text-sm text-white/50 leading-relaxed">{consistency.interpretation}</p>
+                          <p className="text-[10px] text-white/20 mt-2">
+                            High variability disrupts circadian rhythm and reduces sleep quality.
+                          </p>
+                        </div>
                       </div>
-                      <div className="px-7 py-5">
-                        <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1.5">Interpretation</p>
-                        <p className="text-sm text-white/55 leading-relaxed">{insight.interpretation}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Efficiency trend (compact, secondary) */}
+                {efficiencyData.some(d => d.value != null) && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                    <div>
+                      <div className="flex items-baseline gap-4 mb-4">
+                        <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Efficiency</p>
+                        <div className="flex gap-4 text-xs text-[#888888]">
+                          {latest?.efficiency_pct != null && (
+                            <span>Last: <span className="font-semibold text-[#E7EDF2]">{Math.round(Number(latest.efficiency_pct))}%</span></span>
+                          )}
+                          {avg14Eff != null && (
+                            <span>Avg: <span className="font-semibold text-[#E7EDF2]">{avg14Eff}%</span></span>
+                          )}
+                        </div>
                       </div>
+                      <SleepEfficiencyChart data={efficiencyData} unit="%" goodThreshold={85} higherIsBetter chartHeight={160} />
                     </div>
-                  ))}
-                </div>
-              </Container>
-            </div>
-          )}
+                    {wakeCountData.some(d => d.value != null) && (
+                      <div>
+                        <div className="flex items-baseline gap-4 mb-4">
+                          <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Wake Count</p>
+                          {avg14Wakes != null && (
+                            <span className="text-xs text-[#888888]">Avg: <span className="font-semibold text-[#E7EDF2]">{avg14Wakes}</span></span>
+                          )}
+                        </div>
+                        <WakeCountChart data={wakeCountData} chartHeight={160} />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Container>
+          </div>
+
+          {/* ══ SECTION 2 — Sleep Architecture ══════════════════════════════════ */}
+          {(() => {
+            const archRecords = records14.filter(r => r.deep_minutes || r.rem_minutes || r.core_minutes)
+            const hasArch = archRecords.length > 0
+            const hasSingleNight = latest && (latest.deep_minutes || latest.core_minutes || latest.rem_minutes || latest.awake_minutes)
+            if (!hasArch && !hasSingleNight) return null
+
+            const stageHistory: import('@/components/charts/sleep-stage-history-chart').SleepStageNight[] =
+              records14.map(r => ({
+                date:  r.date,
+                deep:  r.deep_minutes,
+                rem:   r.rem_minutes,
+                core:  r.core_minutes,
+                awake: r.awake_minutes,
+              }))
+
+            return (
+              <div className="border-t border-white/[0.06] pt-10 pb-12">
+                <Container>
+                  <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-8">
+                    Sleep Architecture
+                  </p>
+
+                  {/* Multi-night stacked chart */}
+                  {hasArch && (
+                    <div className="mb-10">
+                      <p className="text-xs text-white/30 mb-5">
+                        14-night stage breakdown — each bar is one night.
+                      </p>
+                      <SleepStageHistoryChart data={stageHistory} chartHeight={220} />
+                    </div>
+                  )}
+
+                  {/* Last night detail */}
+                  {hasSingleNight && (
+                    <div className="border-t border-white/[0.06] pt-8 mt-2">
+                      <p className="text-[10px] font-semibold text-white/20 uppercase tracking-[0.14em] mb-6">
+                        Last night — stage detail
+                      </p>
+                      <SleepArchitectureChart
+                        deep={latest!.deep_minutes}
+                        core={latest!.core_minutes}
+                        rem={latest!.rem_minutes}
+                        awake={latest!.awake_minutes}
+                        inBed={latest!.in_bed_minutes}
+                        asleep={latest!.asleep_minutes}
+                      />
+                      {(() => {
+                        const archTotal = (latest!.deep_minutes ?? 0) + (latest!.core_minutes ?? 0) +
+                          (latest!.rem_minutes ?? 0) + (latest!.awake_minutes ?? 0)
+                        if (!archTotal) return null
+                        const pct = (m: number | null) => m ? Math.round((m / archTotal) * 100) : null
+                        const stages = [
+                          { label: 'Deep', minutes: latest!.deep_minutes, pct: pct(latest!.deep_minutes), ref: '~10–20%',
+                            assess: (p: number) => p < 10 ? 'low-normal' : p <= 20 ? 'typical' : 'above typical' },
+                          { label: 'REM', minutes: latest!.rem_minutes, pct: pct(latest!.rem_minutes), ref: '~20–25%',
+                            assess: (p: number) => p < 15 ? 'below typical' : p < 20 ? 'slightly below' : p <= 25 ? 'typical' : 'slightly above' },
+                          { label: 'Core', minutes: latest!.core_minutes, pct: pct(latest!.core_minutes), ref: 'majority',
+                            assess: (p: number) => p >= 40 ? 'typical' : 'lower than typical' },
+                          { label: 'Awake', minutes: latest!.awake_minutes, pct: pct(latest!.awake_minutes), ref: 'lower is better',
+                            assess: (p: number) => p < 5 ? 'low — good' : p < 10 ? 'typical' : 'elevated' },
+                        ].filter(s => s.minutes != null && s.minutes > 0)
+                        return (
+                          <div className="mt-8 space-y-3">
+                            {stages.map(s => {
+                              const assessment = s.pct != null ? s.assess(s.pct) : null
+                              const isNote = assessment && (assessment.includes('below') || assessment.includes('elevated'))
+                              return (
+                                <div key={s.label} className="flex items-baseline gap-4">
+                                  <span className="text-white/50 w-14 flex-shrink-0 text-sm">{s.label}</span>
+                                  <span className="font-mono text-white/70 w-16 flex-shrink-0 text-sm">{s.minutes ? formatMinutes(s.minutes) : '—'}</span>
+                                  <span className="text-white/40 w-10 flex-shrink-0 font-mono text-sm">{s.pct != null ? `${s.pct}%` : ''}</span>
+                                  <span className="text-white/25 text-xs w-20 flex-shrink-0">{s.ref}</span>
+                                  {assessment && (
+                                    <span className={isNote ? 'text-[#FFB000] text-sm' : 'text-white/35 text-sm'}>
+                                      {assessment}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                            <p className="text-xs text-white/20 mt-4">
+                              Apple Watch estimates are approximate. Ranges vary by age and individual.
+                            </p>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )}
+                </Container>
+              </div>
+            )
+          })()}
+
+          {/* ══ SECTION 3 — Next-Day Recovery Effect ═════════════════════════════ */}
+          {(() => {
+            const hrvInsight = intelligenceInsights.find(i => i.id === 'sleep-hrv')
+            const otherInsights = intelligenceInsights.filter(i => i.id !== 'sleep-hrv')
+            const MIN_PAIRS = 7
+
+            // Pair each sleep record with next-day HRV
+            type HmRow = { date: string; hrv_ms: number | string | null }
+            const hmRows = (hmAll30d ?? []) as HmRow[]
+            const hrvByDate: Record<string, number> = {}
+            for (const r of hmRows) {
+              if (r.hrv_ms != null && !hrvByDate[r.date]) {
+                hrvByDate[r.date] = Number(r.hrv_ms)
+              }
+            }
+            // For each sleep night, get next-day HRV
+            const pairs = sleepRecords
+              .filter(r => r.asleep_minutes != null)
+              .map(r => {
+                const nextDate = format(
+                  new Date(new Date(r.date + 'T12:00:00').getTime() + 86400000),
+                  'yyyy-MM-dd'
+                )
+                const hrv = hrvByDate[nextDate] ?? null
+                return { sleep: r.asleep_minutes! / 60, hrv }
+              })
+              .filter(p => p.hrv != null) as { sleep: number; hrv: number }[]
+
+            const hasSufficientData = pairs.length >= MIN_PAIRS
+
+            return (
+              <div className="border-t border-white/[0.06] pt-10 pb-12">
+                <Container>
+                  <div className="mb-8">
+                    <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-1">
+                      Next-Day Recovery Effect
+                    </p>
+                    <p className="text-xs text-white/25 mt-1">
+                      Relationship between sleep and next-day HRV. Association only — not causal.
+                    </p>
+                  </div>
+
+                  {!hasSufficientData ? (
+                    <div className="bg-[#272D35] border border-white/[0.06] px-7 py-6 max-w-xl">
+                      <p className="text-sm text-white/40">
+                        More nights needed for reliable pattern detection.
+                      </p>
+                      <p className="text-xs text-white/20 mt-2">
+                        {pairs.length} night{pairs.length !== 1 ? 's' : ''} with HRV data so far. Need {MIN_PAIRS} to detect a pattern.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* HRV insight card */}
+                      {hrvInsight && (
+                        <div className="bg-[#272D35] border border-white/[0.06] max-w-2xl">
+                          <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
+                            <h3 className="font-bold text-white leading-tight" style={{ fontSize: '1.125rem', letterSpacing: '-0.01em' }}>
+                              {hrvInsight.title}
+                            </h3>
+                            <p className="font-mono text-[10px] text-white/30 mt-2">{hrvInsight.comparison}</p>
+                          </div>
+                          <div className="px-7 py-5 border-b border-white/[0.06]">
+                            <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1.5">Observed difference</p>
+                            <p className="font-bold text-white text-sm">{hrvInsight.difference}</p>
+                          </div>
+                          <div className="px-7 py-5">
+                            <p className="text-sm text-white/55 leading-relaxed">{hrvInsight.interpretation}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Other correlations (caffeine, deficit, training) */}
+                      {otherInsights.length > 0 && (
+                        <div className={cn(
+                          'grid gap-4',
+                          otherInsights.length === 1 ? 'grid-cols-1 max-w-2xl' : 'grid-cols-1 lg:grid-cols-2'
+                        )}>
+                          {otherInsights.map(insight => (
+                            <div key={insight.id} className="bg-[#272D35] border border-white/[0.06]">
+                              <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
+                                <h3 className="font-bold text-white leading-tight" style={{ fontSize: '1.0rem', letterSpacing: '-0.01em' }}>
+                                  {insight.title}
+                                </h3>
+                              </div>
+                              <div className="px-7 py-5 border-b border-white/[0.06]">
+                                <p className="font-bold text-white text-sm">{insight.difference}</p>
+                              </div>
+                              <div className="px-7 py-5">
+                                <p className="text-sm text-white/50 leading-relaxed">{insight.interpretation}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Container>
+              </div>
+            )
+          })()}
 
           {/* ══ ZONE 3d — Sleep Coach ═════════════════════════════════════════════ */}
           {coachCards.length > 0 && (
@@ -649,126 +765,6 @@ export default async function SleepPage() {
               </Container>
             </div>
           )}
-
-          {/* ══ ZONE 4 — Trends (light background) ══════════════════════════════ */}
-          <div className="bg-[#20252B]">
-            <Container className="py-12">
-              <div className="mb-10">
-                <p className="text-[10px] font-semibold text-[#888888] uppercase tracking-[0.18em]">
-                  {records14.filter(r => r.asleep_minutes != null).length >= 12
-                    ? '14-Day Trends'
-                    : 'Recent Sleep Trends'}
-                </p>
-                {records14.filter(r => r.asleep_minutes != null).length < 14 && (
-                  <p className="text-xs text-[#888888] mt-1">
-                    {records14.filter(r => r.asleep_minutes != null).length} nights recorded in the selected period.
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-12">
-                {/* Duration — full width, most important */}
-                <div>
-                  <div className="flex items-baseline gap-6 mb-4">
-                    <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Sleep Duration</p>
-                    <div className="flex gap-5 text-xs text-[#888888]">
-                      {latest?.asleep_minutes != null && (
-                        <span>Last: <span className="font-semibold text-[#E7EDF2]">{formatMinutes(latest.asleep_minutes)}</span></span>
-                      )}
-                      {avg14Duration && (
-                        <span>14d avg: <span className="font-semibold text-[#E7EDF2]">{avg14Duration}h</span></span>
-                      )}
-                      {trendLabel(durationTrend).text && (
-                        <span className={cn('font-semibold', trendLabel(durationTrend).cls)}>
-                          {trendLabel(durationTrend).text}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <SleepChart data={durationData} chartHeight={200} onDark />
-                </div>
-
-                {/* 2-col: Efficiency | Wake Count */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                  <div>
-                    <div className="flex items-baseline gap-4 mb-4">
-                      <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Efficiency</p>
-                      <div className="flex gap-4 text-xs text-[#888888]">
-                        {latest?.efficiency_pct != null && (
-                          <span>Last: <span className="font-semibold text-[#E7EDF2]">{Math.round(Number(latest.efficiency_pct))}%</span></span>
-                        )}
-                        {avg14Eff != null && (
-                          <span>Avg: <span className="font-semibold text-[#E7EDF2]">{avg14Eff}%</span></span>
-                        )}
-                        {trendLabel(effTrend).text && (
-                          <span className={cn('font-semibold', trendLabel(effTrend).cls)}>{trendLabel(effTrend).text}</span>
-                        )}
-                      </div>
-                    </div>
-                    <SleepEfficiencyChart data={efficiencyData} unit="%" goodThreshold={85} higherIsBetter chartHeight={200} />
-                  </div>
-
-                  <div>
-                    <div className="flex items-baseline gap-4 mb-4">
-                      <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Wake Count</p>
-                      <div className="flex gap-4 text-xs text-[#888888]">
-                        {latest?.wake_count != null && (
-                          <span>Last: <span className="font-semibold text-[#E7EDF2]">{latest.wake_count}</span></span>
-                        )}
-                        {avg14Wakes != null && (
-                          <span>Avg: <span className="font-semibold text-[#E7EDF2]">{avg14Wakes}</span></span>
-                        )}
-                      </div>
-                    </div>
-                    <WakeCountChart data={wakeCountData} chartHeight={200} />
-                  </div>
-                </div>
-
-                {/* 2-col: Deep Sleep | Sleep HRV */}
-                {(deepData.some(d => d.hours != null) || avg14Hrv != null) && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                    {deepData.some(d => d.hours != null) && (
-                      <div>
-                        <div className="flex items-baseline gap-4 mb-4">
-                          <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Deep Sleep</p>
-                          <div className="flex gap-4 text-xs text-[#888888]">
-                            {latest?.deep_minutes != null && (
-                              <span>Last: <span className="font-semibold text-[#E7EDF2]">{formatMinutes(latest.deep_minutes)}</span></span>
-                            )}
-                            {avg14Deep != null && (
-                              <span>Avg: <span className="font-semibold text-[#E7EDF2]">{avg14Deep}h</span></span>
-                            )}
-                          </div>
-                        </div>
-                        <SleepChart data={deepData} maxHours={2} fixedColor="#55606C" chartHeight={200} onDark />
-                      </div>
-                    )}
-
-                    {avg14Hrv != null && (
-                      <div>
-                        <div className="flex items-baseline gap-4 mb-4">
-                          <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Avg Sleep HRV</p>
-                          <div className="flex gap-4 text-xs text-[#888888]">
-                            {latest?.avg_hrv != null && (
-                              <span>Last: <span className="font-semibold text-[#E7EDF2]">{Math.round(Number(latest.avg_hrv))} ms</span></span>
-                            )}
-                            <span>Avg: <span className="font-semibold text-[#E7EDF2]">{Math.round(avg14Hrv)} ms</span></span>
-                          </div>
-                        </div>
-                        <SleepEfficiencyChart
-                          data={records14.map(r => ({ date: r.date, value: r.avg_hrv ? Math.round(Number(r.avg_hrv)) : null }))}
-                          unit=" ms"
-                          goodThreshold={40}
-                          higherIsBetter
-                          chartHeight={200}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </Container>
-          </div>
 
           {/* ══ ZONE 5 — Patterns (only show real findings) + Experiments ════════ */}
           <div className="bg-[#151A20]">
