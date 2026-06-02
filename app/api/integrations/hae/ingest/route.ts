@@ -450,42 +450,51 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  // ── 5. Extract metrics array ───────────────────────────────────────────────
-  // TEMP: log payload shape for workout format investigation
-  console.log('[hae/ingest] top-level keys:', JSON.stringify(Object.keys(body)))
+  // ── 5. Extract data envelope ───────────────────────────────────────────────
   const data = body?.data as Record<string, unknown> | undefined
-  if (data != null) {
-    console.log('[hae/ingest] body.data keys:', JSON.stringify(Object.keys(data)))
-    // Log first element of any array-valued key to reveal workout structure
-    for (const [k, v] of Object.entries(data)) {
-      if (Array.isArray(v) && v.length > 0) {
-        console.log(`[hae/ingest] body.data.${k}[0]:`, JSON.stringify(v[0]).slice(0, 600))
-      }
-    }
-  } else {
-    // data is null/undefined — show what IS at the top level
-    console.log('[hae/ingest] body.data is missing. Body sample:', JSON.stringify(body).slice(0, 600))
-  }
-  // END TEMP
 
-  const metricsRaw = data?.metrics
-  if (!Array.isArray(metricsRaw)) {
+  // ── 6. Resolve workouts and metrics arrays ─────────────────────────────────
+  //
+  // HAE sends different payload shapes depending on the automation type:
+  //
+  //   Health metrics + sleep:  { data: { metrics: [...] } }
+  //   Mixed (metrics+workouts): { data: { metrics: [...], workouts: [...] } }
+  //   Workout-only:            { data: { workouts: [...] } }   ← no metrics key
+  //                       OR:  { workouts: [...] }              ← no data wrapper
+  //
+  // Workouts at body.workouts is the fallback for workout-only automations that
+  // don't wrap the payload in a data envelope.
+  const metricsRaw: unknown = data?.metrics
+
+  const workoutsRaw: unknown[] = (() => {
+    // Prefer body.data.workouts, fall back to body.workouts (top-level)
+    if (Array.isArray(data?.workouts) && (data!.workouts as unknown[]).length > 0)
+      return data!.workouts as unknown[]
+    if (Array.isArray(body?.workouts) && (body.workouts as unknown[]).length > 0)
+      return body.workouts as unknown[]
+    return []
+  })()
+
+  // Guard: require at least one recognisable data source
+  const hasMetrics  = Array.isArray(metricsRaw)
+  const hasWorkouts = workoutsRaw.length > 0
+
+  if (!hasMetrics && !hasWorkouts) {
     return NextResponse.json(
-      { ok: false, error: 'Expected body.data.metrics to be an array.' },
+      {
+        ok: false,
+        error: 'No recognized data found. Expected body.data.metrics (health/sleep) or body.data.workouts / body.workouts (workouts).',
+      },
       { status: 400 }
     )
   }
 
-  // ── 6. Partition: health metrics vs sleep_analysis vs workouts vs ignored weight ──
+  // ── 7. Partition health metrics / sleep_analysis / ignored weight ──────────
   const healthMetricGroups: unknown[] = []
   const sleepAnalysisPoints: unknown[] = []
   const metricsIgnored: string[] = []   // weight/body-comp fields present but skipped
 
-  // Workouts come from body.data.workouts (separate from the metrics array)
-  const rawWorkouts = data?.workouts
-  const workoutsRaw: unknown[] = Array.isArray(rawWorkouts) ? rawWorkouts : []
-
-  for (const metricGroup of metricsRaw) {
+  for (const metricGroup of (hasMetrics ? metricsRaw as unknown[] : [])) {
     const mg   = metricGroup as Record<string, unknown>
     const name = typeof mg.name === 'string' ? mg.name : ''
 
