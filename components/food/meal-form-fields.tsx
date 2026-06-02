@@ -32,7 +32,33 @@ const CONFIDENCE_STYLES: Record<ConfidenceLevel, string> = {
   low:    'bg-[#FF8A00]/10 text-[#FF8A00] border-[#FF8A00]/20',
 }
 
-// ── Shared input classes ────────────────────────────────────────────────────
+// ── Decimal helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Normalise a raw macro input string.
+ * - Replaces comma decimal separator with dot ("1,7" → "1.7")
+ * - Strips any character that is not a digit or dot
+ * - Prevents multiple dots (keeps only the first)
+ * Does NOT remove a trailing dot so typing "1." mid-entry is allowed.
+ */
+function normalizeDecimal(raw: string): string {
+  let v = raw.replace(',', '.')                  // comma → dot
+  v = v.replace(/[^0-9.]/g, '')                  // digits and dot only
+  const parts = v.split('.')
+  if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('')  // one dot max
+  return v
+}
+
+/**
+ * Format a macro value string for display — removes unnecessary trailing zeros.
+ * "1.0" → "1", "1.50" → "1.5", "1.75" → "1.75", "0.3" → "0.3"
+ */
+function fmtMacroDisplay(v: string): string {
+  const n = parseFloat(v.replace(',', '.'))
+  return isNaN(n) ? v : String(n)
+}
+
+// ── Shared input classes ─────────────────────────────────────────────────────
 
 const inputBase =
   'h-11 w-full rounded-lg border border-white/[0.08] bg-[#272D35] px-3 ' +
@@ -223,7 +249,7 @@ export function MealFormFields({
             Macros (optional)
             {hasMacros && (
               <span className="text-xs font-mono text-white/30">
-                P:{protein}g · C:{carbs}g · F:{fat}g
+                P:{fmtMacroDisplay(protein)}g · C:{fmtMacroDisplay(carbs)}g · F:{fmtMacroDisplay(fat)}g
               </span>
             )}
           </span>
@@ -242,13 +268,14 @@ export function MealFormFields({
                 <label className="text-[10px] font-bold text-white/35 uppercase tracking-[0.1em]">
                   {label}
                 </label>
+                {/* type="text" + inputMode="decimal" accepts any decimal (including comma separator).
+                    step="any" would still trigger browser validation; text avoids it entirely. */}
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={value}
-                  onChange={e => set(e.target.value)}
+                  onChange={e => set(normalizeDecimal(e.target.value))}
                   placeholder="0"
-                  min="0"
-                  step="0.5"
                   className={cn(inputBase, 'px-2 text-center')}
                 />
                 <span className="text-xs text-white/25">g</span>
