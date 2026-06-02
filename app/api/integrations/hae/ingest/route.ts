@@ -451,7 +451,23 @@ export async function POST(request: Request) {
   }
 
   // ── 5. Extract metrics array ───────────────────────────────────────────────
+  // TEMP: log payload shape for workout format investigation
+  console.log('[hae/ingest] top-level keys:', JSON.stringify(Object.keys(body)))
   const data = body?.data as Record<string, unknown> | undefined
+  if (data != null) {
+    console.log('[hae/ingest] body.data keys:', JSON.stringify(Object.keys(data)))
+    // Log first element of any array-valued key to reveal workout structure
+    for (const [k, v] of Object.entries(data)) {
+      if (Array.isArray(v) && v.length > 0) {
+        console.log(`[hae/ingest] body.data.${k}[0]:`, JSON.stringify(v[0]).slice(0, 600))
+      }
+    }
+  } else {
+    // data is null/undefined — show what IS at the top level
+    console.log('[hae/ingest] body.data is missing. Body sample:', JSON.stringify(body).slice(0, 600))
+  }
+  // END TEMP
+
   const metricsRaw = data?.metrics
   if (!Array.isArray(metricsRaw)) {
     return NextResponse.json(
