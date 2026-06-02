@@ -51,18 +51,18 @@ export function CalorieBalanceChart({ data }: Props) {
         <CartesianGrid strokeDasharray="3 3" stroke="#D9D9D9" />
         <XAxis
           dataKey="date"
-          tick={{ fontSize: 11, fill: '#888888' }}
+          tick={{ fontSize: 11, fill: '#888888', fontFamily: 'var(--font-jetbrains-mono), monospace' }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: '#888888' }}
+          tick={{ fontSize: 11, fill: '#888888', fontFamily: 'var(--font-jetbrains-mono), monospace' }}
           axisLine={false}
           tickLine={false}
           tickFormatter={v => `${Math.round(v / 100) * 100}`}
           width={45}
         />
-        <Tooltip content={<CustomTooltip />} />
+        <Tooltip content={<CustomTooltip />} cursor={false} />
         <ReferenceLine y={0} stroke="#D9D9D9" strokeWidth={1.5} />
 
         <Bar dataKey="consumed" name="consumed" fill="#0D0D0D" opacity={0.7} radius={[2, 2, 0, 0]} />

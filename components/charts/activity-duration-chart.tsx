@@ -24,8 +24,8 @@ function CustomTooltip({ active, payload, label }: {
       <p className="font-medium text-gray-700">
         Week of {label ? format(parseISO(label), 'd MMM') : ''}
       </p>
-      <p className="text-[#0D0D0D]">{payload[0].value} min ({hours}h)</p>
-      {payload[1] && <p className="text-gray-500">{payload[1].value?.toFixed(1)} km</p>}
+      <p className="font-mono text-[#0D0D0D]">{payload[0].value} min ({hours}h)</p>
+      {payload[1] && <p className="font-mono text-gray-500">{payload[1].value?.toFixed(1)} km</p>}
     </div>
   )
 }
@@ -46,18 +46,18 @@ export function ActivityDurationChart({ data }: { data: WeeklyActivityTotal[] })
         <XAxis
           dataKey="weekStart"
           tickFormatter={(v) => format(parseISO(v), 'd MMM')}
-          tick={{ fontSize: 11, fill: '#9ca3af' }}
+          tick={{ fontSize: 11, fill: '#9ca3af', fontFamily: 'var(--font-jetbrains-mono), monospace' }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: '#9ca3af' }}
+          tick={{ fontSize: 11, fill: '#9ca3af', fontFamily: 'var(--font-jetbrains-mono), monospace' }}
           axisLine={false}
           tickLine={false}
           width={36}
           tickFormatter={(v) => `${v}m`}
         />
-        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
+        <Tooltip content={<CustomTooltip />} cursor={false} />
         <Bar
           dataKey="totalDurationMinutes"
           fill="#0D0D0D"

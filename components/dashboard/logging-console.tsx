@@ -265,7 +265,7 @@ export function LoggingConsole({ currentWeight }: { currentWeight?: number | nul
       {weightStatus === 'saved' ? (
         <div>
           <div className="flex items-baseline gap-2">
-            <span className="font-display font-bold text-white tabular-nums leading-none"
+            <span className="font-bold text-white font-mono tabular-nums leading-none"
                   style={{ fontSize: '3rem' }}>
               {weightVal}
             </span>
@@ -288,7 +288,7 @@ export function LoggingConsole({ currentWeight }: { currentWeight?: number | nul
               }}
               onBlur={saveWeight}
               className={cn(
-                'font-display font-bold text-white tabular-nums leading-none',
+                'font-bold text-white font-mono tabular-nums leading-none',
                 'bg-transparent border-0 focus:outline-none w-32',
               )}
               style={{ fontSize: '3rem' }}
@@ -303,7 +303,7 @@ export function LoggingConsole({ currentWeight }: { currentWeight?: number | nul
         <button onClick={openWeightEdit} className="text-left group">
           <div className="flex items-baseline gap-2">
             <span
-              className="font-display font-bold tabular-nums leading-none transition-colors group-hover:text-white/60"
+              className="font-bold font-mono tabular-nums leading-none transition-colors group-hover:text-white/60"
               style={{ fontSize: '3rem', color: weightVal ? 'white' : 'rgba(255,255,255,0.2)' }}
             >
               {weightVal || '——'}
@@ -323,7 +323,7 @@ export function LoggingConsole({ currentWeight }: { currentWeight?: number | nul
   // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="bg-[#0D0D0D] border-t border-white/8">
+    <div className="bg-[#20252B] border-t border-white/8">
 
       {/* ── MOBILE: tab switcher ─────────────────────────────────────────── */}
       <div className="lg:hidden">

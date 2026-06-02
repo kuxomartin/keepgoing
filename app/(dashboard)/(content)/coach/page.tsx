@@ -39,7 +39,7 @@ export default async function CoachPage() {
     <div>
 
       {/* ── BRIEFING HEADER ───────────────────────────────────────────── */}
-      <div className="bg-[#0D0D0D] dark:bg-zinc-950 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-6 pb-10">
+      <div className="bg-[#20252B] dark:bg-zinc-950 -mx-4 sm:-mx-6 px-4 sm:px-6 pt-6 pb-10">
         <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.15em] mb-8">
           Coach · {weekLabel}
           {!hasRealData && <span className="ml-3 text-[#D97706]/60">demo data</span>}

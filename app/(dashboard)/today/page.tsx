@@ -17,6 +17,10 @@ import {
   computeProteinTarget, detectDuckMeat, detectEveningFruit, generateFoodObservationInsights,
 } from '@/lib/profile/food-context'
 import { getSleepContextSentence } from '@/lib/calculations/sleep-verdict'
+import { computeTodayNutritionStatus } from '@/lib/nutrition/today-status'
+import { NutritionStatusSection } from '@/components/nutrition/nutrition-status-section'
+import { buildActivityProposal } from '@/lib/insights/activity-proposal'
+import { ActivityProposalCard } from '@/components/insights/activity-proposal-card'
 import type { HealthMetrics, SleepRecord } from '@/types/database'
 import type { DaySummary, TodayReadiness } from '@/lib/insights/types'
 
@@ -28,9 +32,9 @@ const VERDICT_TEXT: Record<TodayReadiness, string> = {
   recover: 'Body still recovering.',
 }
 const VERDICT_COLOR: Record<TodayReadiness, string> = {
-  push:    'text-[#0D0D0D] dark:text-zinc-50',
-  train:   'text-[#0D0D0D] dark:text-zinc-50',
-  easy:    'text-[#0D0D0D] dark:text-zinc-50',
+  push:    'text-white',
+  train:   'text-white',
+  easy:    'text-white',
   recover: 'text-[#E5173F]',
 }
 
@@ -191,6 +195,17 @@ export default async function TodayPage() {
   const widgetHrv    = realMetrics?.hrv_ms ?? fallbackRecovery?.hrv ?? null
   const widgetWeight = latestWeightReal?.weight_kg ?? null
 
+  // ── Apple Health data date ─────────────────────────────────────────────────
+  // AH rows are typically the *previous* day; realMetrics[today] may be absent
+  const appleHealthDate: string | null =
+    (realMetrics?.hrv_ms != null || realMetrics?.sleep_minutes != null)
+      ? today
+      : fallbackRecovery?.date ?? null
+  const isAppleHealthStale = appleHealthDate !== null && appleHealthDate !== today
+  const appleHealthDateLabel = isAppleHealthStale && appleHealthDate
+    ? format(new Date(appleHealthDate + 'T12:00:00'), 'd MMM yyyy')
+    : null
+
   // ── HRV/Sleep trends ──────────────────────────────────────────────────────
   const last7    = historical.slice(-7)
   const hrvSpark = last7.map(d => d.hrv).filter((v): v is number => v != null)
@@ -203,12 +218,42 @@ export default async function TodayPage() {
   const ydayBalance = yday?.calories != null && ydayBurned != null && ydayBurned > 0
     ? Math.round(yday.calories - ydayBurned) : null
 
-  // ── Daily rec (engines must run, output unused on this page) ──────────────
+  // ── Daily rec + Activity Proposal inputs ──────────────────────────────────
   const baselines = computeBaselines(historical)
   const bikeRides = (activitiesRaw ?? []).filter(r => r.activity_type === 'ride').map(r => r.start_time.slice(0, 10)).sort().reverse()
+  const runRides  = (activitiesRaw ?? []).filter(r => r.activity_type === 'run').map(r => r.start_time.slice(0, 10)).sort().reverse()
   const daysSinceLastBike = bikeRides.length > 0 ? differenceInCalendarDays(new Date(), new Date(bikeRides[0] + 'T12:00:00')) : null
+  const daysSinceLastRun  = runRides.length  > 0 ? differenceInCalendarDays(new Date(), new Date(runRides[0]  + 'T12:00:00')) : null
   const d7ago = format(subDays(startOfDay(new Date()), 6), 'yyyy-MM-dd')
   const weeklyActivityMins = Object.entries(actMins).filter(([d]) => d >= d7ago && d <= today).reduce((s, [, m]) => s + m, 0)
+
+  // Days since last hard session (≥45 min) for proposal
+  const hardSessionDates = (activitiesRaw ?? [])
+    .filter(r => (r.duration_minutes ?? 0) >= 45)
+    .map(r => r.start_time.slice(0, 10))
+    .sort()
+    .reverse()
+  const daysSinceHardForProposal = hardSessionDates.length > 0
+    ? differenceInCalendarDays(new Date(), new Date(hardSessionDates[0] + 'T12:00:00'))
+    : null
+
+  // HRV ratio for proposal
+  const refHrv = widgetHrv != null ? Number(widgetHrv) : null
+  const hrvRatioForProposal = refHrv != null && baselines.hrv14d != null
+    ? refHrv / baselines.hrv14d
+    : null
+
+  const activityProposal = buildActivityProposal({
+    readiness:           engine.todayReadiness,
+    sleepH:              widgetSleepH,
+    weeklyActivityMins,
+    daysSinceLastBike,
+    daysSinceLastRun,
+    daysSinceHardSession: daysSinceHardForProposal,
+    hrvRatio:            hrvRatioForProposal,
+    checkinSoreness:     checkinData?.soreness ?? null,
+  })
+
   void generateDailyRecommendation({ todayHrv: realMetrics?.hrv_ms != null ? Number(realMetrics.hrv_ms) : null, hrv14dBaseline: baselines.hrv14d, todaySleepH: widgetSleepH, consumedKcal: consumed, proteinG: proteinToday, fatG: fatToday, historical, yday, weeklyActivityMins, daysSinceLastBike, proteinTargetG: proteinTarget.grams, personalContext })
 
   const latestSleepRecord = (sleepRecordRaw?.[0] ?? null) as SleepRecord | null
@@ -217,6 +262,64 @@ export default async function TodayPage() {
   const verdictText  = VERDICT_TEXT[engine.todayReadiness]
   const verdictColor = VERDICT_COLOR[engine.todayReadiness]
   const hasMetrics   = widgetHrv != null || widgetSleepH != null || widgetWeight != null
+
+  // ── Today Nutrition Status ────────────────────────────────────────────────
+  const foodDescriptions    = (todayFoodDesc ?? []).map((f: { description: string }) => f.description)
+  const statusCoffeeHour    = lastCoffeeLog
+    ? parseInt(lastCoffeeLog.consumed_at.slice(11, 13), 10)
+    : null
+
+  const nutritionStatusItems = computeTodayNutritionStatus({
+    calories:         consumed,
+    calorieTarget:    2000,
+    protein:          proteinToday,
+    proteinTargetG:   proteinTarget.grams,
+    coffeeMg:         coffeeMg > 0 ? coffeeMg : null,
+    lastCoffeeHour:   statusCoffeeHour,
+    foodDescriptions,
+  })
+
+  // ── Sleep Protection (after 14:00 UTC ≈ 16:00 CEST) ──────────────────────
+  const currentUtcHour   = new Date().getUTCHours()
+  const showSleepProtect = currentUtcHour >= 14
+
+  type SleepRisk = 'Low' | 'Medium' | 'High'
+  const sleepRisk: SleepRisk =
+    statusCoffeeHour != null && statusCoffeeHour >= 16 ? 'High'
+    : statusCoffeeHour != null && statusCoffeeHour >= 14 ? 'Medium'
+    : coffeeMg > 300 ? 'Medium'
+    : 'Low'
+
+  const SLEEP_RISK_CLS: Record<SleepRisk, string> = {
+    High:   'text-[#E5173F]',
+    Medium: 'text-[#FFB800]',
+    Low:    'text-[#16A34A]',
+  }
+
+  const sleepBullets: string[] = []
+  if (statusCoffeeHour != null && statusCoffeeHour >= 14) {
+    sleepBullets.push('No more caffeine today')
+  }
+  if (coffeeMg > 200) {
+    sleepBullets.push('Caffeine is already moderate — stop now')
+  }
+  sleepBullets.push('Avoid a large meal after 21:00')
+  if (weeklyActivityMins > 200) {
+    sleepBullets.push('Light evening movement is fine — avoid intensity after 20:00')
+  }
+  sleepBullets.push('Target bedtime before 23:00')
+
+  const planContext = {
+    foodDescriptions,
+    caloriesConsumed:  consumed ?? 0,
+    proteinConsumed:   proteinToday ?? 0,
+    calorieTarget:     2000,
+    proteinTarget:     proteinTarget.grams,
+    coffeeMg:          coffeeMg,
+    recoveryScore:     null as number | null,
+    sleepH:            widgetSleepH,
+    todayTraining:     actMinsToday > 0 ? `${actMinsToday} min active` : null,
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -227,10 +330,10 @@ export default async function TodayPage() {
       ═══════════════════════════════════════════════════════════════════ */}
       <div className="flex flex-col lg:flex-row" style={{ minHeight: '70vh' }}>
 
-        {/* LEFT — White — Verdict + Briefing */}
-        <div className="flex-[65] flex flex-col justify-center px-6 sm:px-10 lg:px-14 py-10 lg:py-0">
+        {/* LEFT — Dark — Verdict + Briefing */}
+        <div className="flex-[65] bg-[#20252B] flex flex-col justify-center px-6 sm:px-10 lg:px-14 py-10 lg:py-0">
           {/* Date — closer to verdict */}
-          <p className="text-[10px] font-semibold text-[#888888] uppercase tracking-[0.15em] mb-5">
+          <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.15em] mb-5">
             {longDate}
           </p>
 
@@ -248,23 +351,27 @@ export default async function TodayPage() {
 
           {/* Interpretation + Recommendation — one tight block */}
           <div className="space-y-1.5" style={{ maxWidth: '480px' }}>
-            <p className="text-base text-[#888888] leading-snug">
+            <p className="text-base text-white/50 leading-snug">
               {engine.todayInterpretation}
             </p>
-            <p className="text-base font-semibold text-[#0D0D0D] dark:text-zinc-200 leading-snug">
+            <p className="text-base font-semibold text-white leading-snug">
               {engine.todayRecommendation}
             </p>
             {sleepContextSentence && (
-              <p className="text-sm text-[#888888] leading-snug">{sleepContextSentence}</p>
+              <p className="text-sm text-white/40 leading-snug">{sleepContextSentence}</p>
             )}
-            {engine.usingFallback && (
-              <p className="text-xs text-[#888888] pt-0.5">Using yesterday&apos;s recovery data</p>
+            {appleHealthDateLabel ? (
+              <p className="text-xs text-white/25 pt-0.5">
+                Recovery data from {appleHealthDateLabel}
+              </p>
+            ) : engine.usingFallback && (
+              <p className="text-xs text-white/25 pt-0.5">Using previous recovery data</p>
             )}
           </div>
         </div>
 
-        {/* RIGHT — Dark — Check-in + Instruments */}
-        <div className="flex-[35] bg-[#0D0D0D] flex flex-col px-6 sm:px-8 lg:px-10 py-10 lg:py-12 gap-8">
+        {/* RIGHT — Darker — Check-in + Instruments */}
+        <div className="flex-[35] bg-[#313943] flex flex-col px-6 sm:px-8 lg:px-10 py-10 lg:py-12 gap-8">
 
           {/* ── Check-in — interactive, fixes the LOG no-op ── */}
           <CheckinPanel existingCheckin={checkinData} />
@@ -275,11 +382,16 @@ export default async function TodayPage() {
           {/* ── Instruments — HRV, Sleep, Weight ── */}
           {hasMetrics && (
             <div className="flex flex-col gap-8">
+              {appleHealthDateLabel && (
+                <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.15em] -mb-4">
+                  Apple Health · {appleHealthDateLabel}
+                </p>
+              )}
 
               {widgetHrv != null && (
                 <div>
                   <div className="flex items-baseline gap-2">
-                    <span className="font-display text-[4rem] font-bold text-white tabular-nums leading-none">
+                    <span className="text-[4rem] font-bold text-white font-mono tabular-nums leading-none">
                       {Math.round(Number(widgetHrv))}
                     </span>
                     <span className="text-sm text-white/30">ms</span>
@@ -299,7 +411,7 @@ export default async function TodayPage() {
               {widgetSleepH != null && (
                 <div>
                   <div className="flex items-baseline gap-2">
-                    <span className="font-display text-[4rem] font-bold text-white tabular-nums leading-none">
+                    <span className="text-[4rem] font-bold text-white font-mono tabular-nums leading-none">
                       {widgetSleepH.toFixed(1)}
                     </span>
                     <span className="text-sm text-white/30">h</span>
@@ -319,7 +431,7 @@ export default async function TodayPage() {
               {widgetWeight != null && (
                 <div>
                   <div className="flex items-baseline gap-2">
-                    <span className="font-display text-[4rem] font-bold text-white tabular-nums leading-none">
+                    <span className="text-[4rem] font-bold text-white font-mono tabular-nums leading-none">
                       {widgetWeight.toFixed(1)}
                     </span>
                     <span className="text-sm text-white/30">kg</span>
@@ -334,6 +446,71 @@ export default async function TodayPage() {
           )}
         </div>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          NUTRITION STATUS — rule-based, always visible + AI plan CTA
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="bg-[#272D35] border-t border-white/[0.06]">
+        <div className="max-w-[1200px] mx-auto px-6 sm:px-10 lg:px-16 py-10">
+          <NutritionStatusSection
+            statusItems={nutritionStatusItems}
+            planContext={planContext}
+          />
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          ACTIVITY PROPOSAL
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="bg-[#20252B] border-t border-white/[0.06]">
+        <div className="max-w-[1200px] mx-auto px-6 sm:px-10 lg:px-16 py-10">
+          <ActivityProposalCard proposal={activityProposal} />
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SLEEP PROTECTION — visible from 14:00 UTC
+      ═══════════════════════════════════════════════════════════════════ */}
+      {showSleepProtect && (
+        <div className="bg-[#272D35] border-t border-white/[0.06]">
+          <div className="max-w-[1200px] mx-auto px-6 sm:px-10 lg:px-16 py-10">
+
+            <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.18em] mb-5">
+              Protect Tonight&apos;s Sleep
+            </p>
+
+            {/* Last coffee + risk */}
+            <div className="flex flex-wrap gap-x-10 gap-y-4 mb-7">
+              {lastCoffeeTime && (
+                <div>
+                  <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1.5">
+                    Last coffee
+                  </p>
+                  <p className="font-mono text-2xl font-bold text-white tabular-nums">{lastCoffeeTime}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1.5">
+                  Sleep risk
+                </p>
+                <p className={cn('font-mono text-2xl font-bold tabular-nums', SLEEP_RISK_CLS[sleepRisk])}>
+                  {sleepRisk}
+                </p>
+              </div>
+            </div>
+
+            {/* Tonight bullets */}
+            <div className="space-y-2">
+              {sleepBullets.map((bullet, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <span className="text-white/20 text-sm leading-snug flex-shrink-0 mt-0.5">·</span>
+                  <p className="text-sm text-white/55 leading-snug">{bullet}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════════
           BOTTOM — Unified Today Console (replaces both strip + old console)

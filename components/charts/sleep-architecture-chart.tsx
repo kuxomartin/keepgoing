@@ -36,7 +36,7 @@ export function SleepArchitectureChart({ deep, core, rem, awake, inBed, asleep }
         <div className="flex gap-8 mb-6">
           {asleep != null && (
             <div>
-              <div className="font-display font-bold text-white text-[2rem] leading-none tabular-nums">
+              <div className="font-bold text-white text-[2rem] leading-none font-mono tabular-nums">
                 {formatMinutes(asleep)}
               </div>
               <div className="text-[10px] font-semibold text-white/30 uppercase tracking-[0.12em] mt-1">Asleep</div>
@@ -44,7 +44,7 @@ export function SleepArchitectureChart({ deep, core, rem, awake, inBed, asleep }
           )}
           {inBed != null && (
             <div>
-              <div className="font-display font-bold text-white/40 text-[2rem] leading-none tabular-nums">
+              <div className="font-bold text-white/40 text-[2rem] leading-none font-mono tabular-nums">
                 {formatMinutes(inBed)}
               </div>
               <div className="text-[10px] font-semibold text-white/30 uppercase tracking-[0.12em] mt-1">In bed</div>

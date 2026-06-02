@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
-import { Inter, Space_Grotesk } from 'next/font/google'
+import { Geist, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from '@/components/providers/theme-provider'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-display', weight: ['700'] })
+const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains-mono', weight: ['400', '500', '600', '700'] })
 
 export const metadata: Metadata = {
   title: 'KeepGoing — Personal Coach',
@@ -28,13 +28,14 @@ const themeScript = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable} h-full`}>
-      <body className="min-h-full font-sans antialiased bg-white dark:bg-zinc-950 text-[#0D0D0D] dark:text-zinc-50 transition-colors duration-200">
+    <html lang="en" className={`${geist.variable} ${jetbrainsMono.variable} h-full`}>
+      <body className="min-h-full font-sans antialiased bg-[#20252B] text-[#E7EDF2] transition-colors duration-200">
         {/* Runs before React hydrates — prevents flash of wrong theme */}
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <ThemeProvider>
           {children}
         </ThemeProvider>
+
       </body>
     </html>
   )

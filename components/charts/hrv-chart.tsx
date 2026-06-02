@@ -23,14 +23,14 @@ function CustomTooltip({ active, payload, label }: {
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white border border-[#D9D9D9] rounded-lg px-3 py-2 text-xs">
-      <p className="font-medium text-[#0D0D0D]">{label ? format(parseISO(label), 'EEE d MMM') : ''}</p>
-      <p className="text-[#888888]">{payload[0].value} ms HRV</p>
+    <div className="bg-[#272D35] border border-white/10 rounded-lg px-3 py-2 text-xs">
+      <p className="font-medium text-[#E7EDF2]">{label ? format(parseISO(label), 'EEE d MMM') : ''}</p>
+      <p className="font-mono text-[#888888]">{payload[0].value} ms HRV</p>
     </div>
   )
 }
 
-export function HrvChart({ data, minimal }: { data: HrvChartPoint[]; minimal?: boolean }) {
+export function HrvChart({ data, minimal, onDark }: { data: HrvChartPoint[]; minimal?: boolean; onDark?: boolean }) {
   const filtered = data.filter((d) => d.hrv !== null) as { date: string; hrv: number }[]
 
   if (filtered.length === 0) {
@@ -71,34 +71,34 @@ export function HrvChart({ data, minimal }: { data: HrvChartPoint[]; minimal?: b
       <AreaChart data={filtered} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id="hrvGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="#0D0D0D" stopOpacity={0.15} />
-            <stop offset="95%" stopColor="#0D0D0D" stopOpacity={0}    />
+            <stop offset="5%"  stopColor={onDark ? '#ffffff' : '#0D0D0D'} stopOpacity={onDark ? 0.12 : 0.15} />
+            <stop offset="95%" stopColor={onDark ? '#ffffff' : '#0D0D0D'} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#D9D9D9" />
+        <CartesianGrid strokeDasharray="3 3" stroke={onDark ? 'rgba(255,255,255,0.06)' : '#D9D9D9'} />
         <XAxis
           dataKey="date"
           tickFormatter={(v) => format(parseISO(v), 'd MMM')}
-          tick={{ fontSize: 11, fill: '#888888' }}
+          tick={{ fontSize: 11, fill: '#A8B3BC', fontFamily: 'var(--font-jetbrains-mono), monospace' }}
           axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
-          tick={{ fontSize: 11, fill: '#888888' }}
+          tick={{ fontSize: 11, fill: '#A8B3BC', fontFamily: 'var(--font-jetbrains-mono), monospace' }}
           axisLine={false}
           tickLine={false}
           width={36}
           unit=" ms"
         />
-        <Tooltip content={<CustomTooltip />} />
+        <Tooltip content={<CustomTooltip />} cursor={false} />
         <Area
           type="monotone"
           dataKey="hrv"
-          stroke="#0D0D0D"
+          stroke={onDark ? '#A8B3BC' : '#55606C'}
           strokeWidth={1.5}
           fill="url(#hrvGrad)"
-          dot={{ r: 2, fill: '#0D0D0D', strokeWidth: 0 }}
+          dot={{ r: 2, fill: onDark ? '#A8B3BC' : '#55606C', strokeWidth: 0 }}
           activeDot={{ r: 3 }}
         />
       </AreaChart>

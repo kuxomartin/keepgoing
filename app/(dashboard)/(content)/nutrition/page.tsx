@@ -105,7 +105,7 @@ export default async function NutritionPage() {
         <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.15em] mb-6">Nutrition</p>
 
         <div className="flex items-baseline gap-3 mb-3">
-          <span className="font-display font-bold text-[#0D0D0D] dark:text-zinc-50 tabular-nums leading-none"
+          <span className="font-bold text-[#0D0D0D] dark:text-zinc-50 font-mono tabular-nums leading-none"
                 style={{ fontSize: '5rem' }}>
             {todayConsumed != null ? fmtKcal(todayConsumed) : '—'}
           </span>
@@ -135,7 +135,7 @@ export default async function NutritionPage() {
                   <MetricInfo slug="protein" />
                 </div>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-[#0D0D0D] dark:text-zinc-50 tabular-nums">{todayProtein}g</span>
+                  <span className="text-2xl font-bold text-[#0D0D0D] dark:text-zinc-50 font-mono tabular-nums">{todayProtein}g</span>
                   {proteinTarget.grams && (
                     <span className={cn('text-sm', proteinReached ? 'text-[#16A34A]' : 'text-[#888888]')}>
                       / {proteinTarget.grams}g
@@ -146,7 +146,7 @@ export default async function NutritionPage() {
               {proteinPct != null && (
                 <div className="h-0.5 bg-[#D9D9D9] dark:bg-zinc-700 rounded-full overflow-hidden">
                   <div
-                    className={cn('h-full rounded-full transition-all', proteinReached ? 'bg-[#16A34A]' : 'bg-[#0D0D0D] dark:bg-zinc-100')}
+                    className={cn('h-full rounded-full transition-all', proteinReached ? 'bg-[#16A34A]' : 'bg-[#20252B] dark:bg-zinc-100')}
                     style={{ width: `${proteinPct}%` }}
                   />
                 </div>
@@ -161,13 +161,13 @@ export default async function NutritionPage() {
             {todayCarbs != null && (
               <div>
                 <span className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Carbs</span>
-                <p className="text-2xl font-bold text-[#0D0D0D] dark:text-zinc-50 tabular-nums mt-1">{todayCarbs}<span className="text-sm font-normal text-[#888888] ml-1">g</span></p>
+                <p className="text-2xl font-bold text-[#0D0D0D] dark:text-zinc-50 font-mono tabular-nums mt-1">{todayCarbs}<span className="text-sm font-normal text-[#888888] ml-1">g</span></p>
               </div>
             )}
             {todayFat != null && (
               <div>
                 <span className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Fat</span>
-                <p className="text-2xl font-bold text-[#0D0D0D] dark:text-zinc-50 tabular-nums mt-1">{todayFat}<span className="text-sm font-normal text-[#888888] ml-1">g</span></p>
+                <p className="text-2xl font-bold text-[#0D0D0D] dark:text-zinc-50 font-mono tabular-nums mt-1">{todayFat}<span className="text-sm font-normal text-[#888888] ml-1">g</span></p>
               </div>
             )}
           </div>
@@ -218,7 +218,7 @@ export default async function NutritionPage() {
                     {format(new Date(date + 'T12:00:00'), 'EEE, d MMM')}
                     {isToday && <span className="ml-2 text-[10px] font-bold text-[#888888] uppercase tracking-widest">Today</span>}
                   </p>
-                  <div className="flex items-center gap-6 text-sm tabular-nums">
+                  <div className="flex items-center gap-6 text-sm font-mono tabular-nums">
                     <span className="text-[#0D0D0D] dark:text-zinc-200">{fmtKcal(c)}</span>
                     <span className="text-[#888888] w-16 text-right">{fmtKcal(b)}</span>
                     <span className={cn('w-16 text-right', bal != null ? textColor : 'text-[#888888]')}>

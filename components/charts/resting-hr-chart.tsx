@@ -24,14 +24,14 @@ function CustomTooltip({ active, payload, label }: {
 }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-3 py-2 text-xs">
-      <p className="font-medium text-gray-700">{label ? format(parseISO(label), 'EEE d MMM') : ''}</p>
-      <p className="text-red-600">{payload[0].value} bpm resting HR</p>
+    <div className="bg-[#272D35] border border-white/10 rounded-lg px-3 py-2 text-xs">
+      <p className="font-medium text-[#E7EDF2]">{label ? format(parseISO(label), 'EEE d MMM') : ''}</p>
+      <p className="font-mono text-[#E5173F]">{payload[0].value} bpm resting HR</p>
     </div>
   )
 }
 
-export function RestingHrChart({ data }: { data: RestingHrChartPoint[] }) {
+export function RestingHrChart({ data, onDark }: { data: RestingHrChartPoint[]; onDark?: boolean }) {
   const filtered = data.filter((d) => d.rhr !== null) as { date: string; rhr: number }[]
 
   if (filtered.length === 0) {
@@ -49,25 +49,25 @@ export function RestingHrChart({ data }: { data: RestingHrChartPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={180}>
       <LineChart data={filtered} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#D9D9D9" />
+        <CartesianGrid strokeDasharray="3 3" stroke={onDark ? 'rgba(255,255,255,0.06)' : '#D9D9D9'} />
         <XAxis
           dataKey="date"
           tickFormatter={(v) => format(parseISO(v), 'd MMM')}
-          tick={{ fontSize: 11, fill: '#9ca3af' }}
+          tick={{ fontSize: 11, fill: '#A8B3BC', fontFamily: 'var(--font-jetbrains-mono), monospace' }}
           axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
           domain={[minY, maxY]}
-          tick={{ fontSize: 11, fill: '#9ca3af' }}
+          tick={{ fontSize: 11, fill: '#A8B3BC', fontFamily: 'var(--font-jetbrains-mono), monospace' }}
           axisLine={false}
           tickLine={false}
           width={36}
           unit=" bpm"
         />
-        <ReferenceLine y={60} stroke="#D9D9D9" strokeDasharray="4 4" strokeWidth={1.5} />
-        <Tooltip content={<CustomTooltip />} />
+        <ReferenceLine y={60} stroke={onDark ? 'rgba(255,255,255,0.08)' : '#D9D9D9'} strokeDasharray="4 4" strokeWidth={1.5} />
+        <Tooltip content={<CustomTooltip />} cursor={false} />
         <Line
           type="monotone"
           dataKey="rhr"

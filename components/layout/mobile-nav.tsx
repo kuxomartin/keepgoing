@@ -2,42 +2,58 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Utensils, Heart, Moon, Settings } from 'lucide-react'
+import { LayoutDashboard, Heart, Moon, Activity, Utensils, Settings } from 'lucide-react'
+import { WeightScaleIcon } from '@/components/icons/weight-scale-icon'
 import { cn } from '@/lib/utils'
 
 const mobileNavItems = [
-  { href: '/today',    label: 'Today',    icon: LayoutDashboard },
-  { href: '/recovery', label: 'Recovery', icon: Heart },
-  { href: '/sleep',    label: 'Sleep',    icon: Moon },
-  { href: '/food',     label: 'Intake',   icon: Utensils },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/today',      label: 'Today',      icon: LayoutDashboard, custom: false },
+  { href: '/recovery',   label: 'Recovery',   icon: Heart,           custom: false },
+  { href: '/sleep',      label: 'Sleep',      icon: Moon,            custom: false },
+  { href: '/activities', label: 'Activities', icon: Activity,        custom: false },
+  { href: '/food',       label: 'Intake',     icon: Utensils,        custom: false },
+  { href: '/weight',     label: 'Weight',     icon: null,            custom: true  },
+  { href: '/settings',   label: 'Settings',   icon: Settings,        custom: false },
 ]
 
 export function MobileNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#0D0D0D] border-t border-white/[0.08] z-30 pb-safe">
-      <div className="flex">
-        {mobileNavItems.map(({ href, label, icon: Icon }) => {
+    <nav
+      className="lg:hidden fixed bottom-0 left-0 right-0 bg-[#1B2128] border-t border-[#222222] z-30"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      <div className="flex h-16">
+        {mobileNavItems.map(({ href, label, icon: Icon, custom }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
+          const iconCls = cn('flex-shrink-0', active ? 'h-[18px] w-[18px]' : 'h-5 w-5')
+
           return (
             <Link
               key={href}
               href={href}
               className={cn(
-                'flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors min-h-[56px] justify-center relative',
-                active ? 'text-[#E5173F]' : 'text-white/30',
+                'flex-1 flex flex-col items-center justify-center gap-0.5 min-w-0 transition-colors',
+                active ? 'text-[#E5173F]' : 'text-[#666666] hover:text-[#888888]',
               )}
             >
-              {active && (
-                <span
-                  className="absolute top-1.5 w-1 h-1 rounded-full bg-[#E5173F]"
-                  aria-hidden
+              {custom ? (
+                <WeightScaleIcon
+                  className={iconCls}
+                  strokeWidth={active ? 2.2 : 1.5}
                 />
+              ) : Icon ? (
+                <Icon
+                  className={iconCls}
+                  strokeWidth={active ? 2.2 : 1.5}
+                />
+              ) : null}
+              {active && (
+                <span className="text-[9px] font-bold uppercase tracking-[0.06em] leading-none">
+                  {label}
+                </span>
               )}
-              <Icon className="h-5 w-5" />
-              <span className="leading-none">{label}</span>
             </Link>
           )
         })}

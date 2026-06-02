@@ -1,6 +1,6 @@
 export default function ContentLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 lg:py-10">
+    <div className="bg-[#20252B] max-w-[1200px] mx-auto px-6 sm:px-10 lg:px-16 py-6 lg:py-10">
       {children}
     </div>
   )

@@ -108,7 +108,7 @@ export function TodayWidget({
           )}>
             {vitals.map(v => (
               <div key={v.label}>
-                <p className="text-2xl font-bold text-white tabular-nums leading-none">{v.value}</p>
+                <p className="text-2xl font-bold text-white font-mono tabular-nums leading-none">{v.value}</p>
                 <div className="flex items-center gap-0.5 mt-1">
                   <span className="text-[10px] text-white/35 uppercase tracking-widest">{v.label} {v.unit}</span>
                   <MetricInfo slug={v.slug} />
@@ -122,7 +122,7 @@ export function TodayWidget({
         {(hasTodayFood || hasCoffee) && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/8 pt-3">
             {consumedKcal != null && (
-              <span className="text-xs text-white/35 tabular-nums">{consumedKcal.toLocaleString()} kcal</span>
+              <span className="text-xs text-white/35 font-mono tabular-nums">{consumedKcal.toLocaleString()} kcal</span>
             )}
             {proteinG != null && (
               <span className="inline-flex items-center gap-0.5 text-xs text-white/35">

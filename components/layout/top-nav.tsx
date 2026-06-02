@@ -11,10 +11,7 @@ const navItems = [
   { href: '/sleep',      label: 'Sleep' },
   { href: '/activities', label: 'Activities' },
   { href: '/food',       label: 'Intake' },
-  { href: '/nutrition',  label: 'Nutrition' },
   { href: '/weight',     label: 'Weight' },
-  { href: '/coach',      label: 'Coach' },
-  { href: '/metrics',    label: 'Metrics' },
   { href: '/settings',   label: 'Settings' },
 ]
 
@@ -30,7 +27,7 @@ export function TopNav() {
   }
 
   return (
-    <header className="hidden lg:flex fixed top-0 left-0 right-0 h-14 z-30 bg-[#0D0D0D] border-b border-white/[0.08] items-center px-6">
+    <header className="hidden lg:flex fixed top-0 left-0 right-0 h-14 z-30 bg-[#1B2128] border-b border-white/[0.08] items-center px-6">
       {/* Logo */}
       <Link
         href="/today"

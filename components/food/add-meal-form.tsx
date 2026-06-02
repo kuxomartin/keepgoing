@@ -162,7 +162,7 @@ export function AddMealForm({ recentMeals, yesterdayMeals, returnTo = '/food' }:
       <div className="flex gap-2 flex-wrap pt-1">
         <button type="button"
           onClick={() => { setMealType('snack'); descRef.current?.focus() }}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium border border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-600 transition-colors active:scale-95"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border border-white/[0.08] text-white/45 hover:border-white/20 hover:text-white/65 transition-colors"
         >
           🍎 Quick snack
         </button>
@@ -170,8 +170,10 @@ export function AddMealForm({ recentMeals, yesterdayMeals, returnTo = '/food' }:
           <button type="button"
             onClick={() => setShowYesterday(v => !v)}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium border transition-colors active:scale-95',
-              showYesterday ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-600'
+              'flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border transition-colors',
+              showYesterday
+                ? 'bg-white/[0.08] border-white/20 text-white/80'
+                : 'border-white/[0.08] text-white/45 hover:border-white/20 hover:text-white/65'
             )}
           >
             <RotateCcw className="h-3.5 w-3.5" />
@@ -182,22 +184,24 @@ export function AddMealForm({ recentMeals, yesterdayMeals, returnTo = '/food' }:
 
       {/* Yesterday */}
       {showYesterday && yesterdayMeals.length > 0 && (
-        <div className="rounded-xl border border-blue-100 bg-blue-50 overflow-hidden">
-          <p className="px-4 py-2.5 text-xs font-semibold text-blue-700 uppercase tracking-wide border-b border-blue-100">Yesterday's meals</p>
-          <ul className="divide-y divide-blue-100">
+        <div className="border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+          <p className="px-4 py-2.5 text-[10px] font-bold text-white/30 uppercase tracking-[0.12em] border-b border-white/[0.06]">
+            Yesterday's meals
+          </p>
+          <ul className="divide-y divide-white/[0.05]">
             {yesterdayMeals.map(meal => (
               <li key={meal.id}>
                 <button type="button" onClick={() => fillFrom(meal)}
-                  className="w-full text-left px-4 py-3 hover:bg-blue-100 transition-colors active:bg-blue-200"
+                  className="w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{meal.description}</p>
-                      <p className="text-xs text-blue-600 mt-0.5 capitalize">
+                      <p className="text-sm font-medium text-[#E7EDF2] truncate">{meal.description}</p>
+                      <p className="text-xs text-white/35 mt-0.5 capitalize">
                         {meal.meal_type}{meal.estimated_calories ? ` · ${meal.estimated_calories} kcal` : ''}
                       </p>
                     </div>
-                    <span className="text-xs text-blue-500 flex-shrink-0 mt-0.5">Use →</span>
+                    <span className="text-xs text-white/30 flex-shrink-0 mt-0.5">Use →</span>
                   </div>
                 </button>
               </li>
@@ -208,22 +212,24 @@ export function AddMealForm({ recentMeals, yesterdayMeals, returnTo = '/food' }:
 
       {/* Recent meals */}
       {recentMeals.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <p className="px-4 py-2.5 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100">Repeat recent meal</p>
-          <ul className="divide-y divide-gray-100">
+        <div className="border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+          <p className="px-4 py-2.5 text-[10px] font-bold text-white/30 uppercase tracking-[0.12em] border-b border-white/[0.06]">
+            Repeat recent meal
+          </p>
+          <ul className="divide-y divide-white/[0.05]">
             {recentMeals.map(meal => (
               <li key={meal.id}>
                 <button type="button" onClick={() => fillFrom(meal)}
-                  className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors active:bg-gray-100"
+                  className="w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm text-gray-800 line-clamp-2">{meal.description}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 capitalize">
+                      <p className="text-sm text-[#E7EDF2] line-clamp-2">{meal.description}</p>
+                      <p className="text-xs text-white/35 mt-0.5 capitalize">
                         {meal.meal_type}{meal.estimated_calories ? ` · ${meal.estimated_calories} kcal` : ''}
                       </p>
                     </div>
-                    <RotateCcw className="h-4 w-4 text-gray-300 flex-shrink-0 mt-0.5" />
+                    <RotateCcw className="h-4 w-4 text-white/20 flex-shrink-0 mt-0.5" />
                   </div>
                 </button>
               </li>

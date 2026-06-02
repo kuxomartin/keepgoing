@@ -23,9 +23,9 @@ const CustomTooltip = ({ active, payload, label, unit }: {
   const val = payload[0].value
   if (val == null) return null
   return (
-    <div className="bg-[#0D0D0D] border border-white/10 text-xs px-2.5 py-1.5 rounded-sm">
-      <span className="text-white/50">{label} · </span>
-      {Math.round(val)}{unit}
+    <div className="bg-[#20252B] border border-white/10 text-xs px-2.5 py-1.5 rounded-sm">
+      <span className="font-mono text-white/50">{label} · </span>
+      <span className="font-mono">{Math.round(val)}{unit}</span>
     </div>
   )
 }
@@ -53,21 +53,21 @@ export function SleepEfficiencyChart({
       <BarChart data={chartData} barCategoryGap="30%" margin={{ top: 4, right: 0, left: -20, bottom: 0 }}>
         <XAxis
           dataKey="label"
-          tick={{ fontSize: 10, fill: '#888888' }}
+          tick={{ fontSize: 10, fill: '#A8B3BC', fontFamily: 'var(--font-jetbrains-mono), monospace' }}
           tickLine={false}
           axisLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
           domain={[domainMin, domainMax]}
-          tick={{ fontSize: 10, fill: '#888888' }}
+          tick={{ fontSize: 10, fill: '#A8B3BC', fontFamily: 'var(--font-jetbrains-mono), monospace' }}
           tickLine={false}
           axisLine={false}
           tickFormatter={v => `${Math.round(v)}${unit}`}
           tickCount={4}
           width={38}
         />
-        <Tooltip content={(props) => (
+        <Tooltip cursor={false} content={(props) => (
           <CustomTooltip
             active={props.active}
             payload={props.payload as unknown as Array<{ value: number }>}
@@ -84,10 +84,10 @@ export function SleepEfficiencyChart({
             const color = v == null
               ? 'transparent'
               : higherIsBetter
-                ? v >= goodThreshold       ? '#0D0D0D'
+                ? v >= goodThreshold       ? '#55606C'
                   : v >= goodThreshold - 10 ? '#FFB000'
                   :                          '#E5173F'
-                : v <= goodThreshold       ? '#0D0D0D'
+                : v <= goodThreshold       ? '#55606C'
                   : v <= goodThreshold + 3  ? '#FFB000'
                   :                          '#E5173F'
             return <Cell key={i} fill={color} />

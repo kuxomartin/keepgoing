@@ -21,13 +21,20 @@ function nowDateTime(): { date: string; time: string } {
   }
 }
 
+// ── Shared input styles ────────────────────────────────────────────────────
+
+const inputBase =
+  'w-full h-11 border border-white/[0.08] bg-[#272D35] px-4 ' +
+  'text-sm text-[#E7EDF2] placeholder:text-white/30 ' +
+  'focus:outline-none focus:border-white/20 focus:ring-1 focus:ring-white/10 transition-colors'
+
 export function AddCoffeeForm({ returnTo = '/today' }: Props) {
   const router = useRouter()
   const { date: defaultDate, time: defaultTime } = nowDateTime()
 
   const [coffeeType, setCoffeeType]         = useState<string>('filter_225')
   const [cups, setCups]                     = useState(1)
-  const [volumeMl, setVolumeMl]             = useState('')           // custom_filter only
+  const [volumeMl, setVolumeMl]             = useState('')
   const [date, setDate]                     = useState(defaultDate)
   const [time, setTime]                     = useState(defaultTime)
   const [caffeineInput, setCaffeineInput]   = useState<string>('165')
@@ -38,7 +45,6 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
 
   const isCustom = COFFEE_SPECS[coffeeType as keyof typeof COFFEE_SPECS]?.isCustom ?? false
 
-  // Auto-update caffeine when type, cups, or custom volume changes
   useEffect(() => {
     if (caffeineManual) return
     if (isCustom) {
@@ -59,7 +65,6 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
     setCoffeeType(type)
     setCaffeineManual(false)
     setVolumeMl('')
-    // Reset cups to 1 when switching type
     setCups(1)
   }
 
@@ -72,7 +77,6 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
     setCups(prev => Math.max(1, prev + delta))
   }
 
-  // Custom filter derived values for display
   const customMl = parseFloat(volumeMl)
   const customCalc = !isNaN(customMl) && customMl > 0
     ? customFilterCaffeine(customMl)
@@ -118,8 +122,10 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
 
       {/* ── Coffee type — one-tap grid ───────────────────────────── */}
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-3">What did you have?</p>
-        <div className="grid grid-cols-2 gap-2.5">
+        <p className="text-[11px] font-bold text-white/40 uppercase tracking-[0.12em] mb-3">
+          What did you have?
+        </p>
+        <div className="grid grid-cols-2 gap-2">
           {COFFEE_TYPE_ORDER.map(type => {
             const spec     = COFFEE_SPECS[type]
             const selected = coffeeType === type
@@ -129,17 +135,16 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
                 type="button"
                 onClick={() => handleTypeSelect(type)}
                 className={cn(
-                  'flex flex-col items-start px-4 py-3.5 rounded-xl border text-left transition-all',
-                  'min-h-[68px]',
+                  'flex flex-col items-start px-4 py-3 border text-left transition-all min-h-[60px]',
                   selected
-                    ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
-                    : 'bg-white text-gray-800 border-gray-200 hover:border-amber-300 hover:bg-amber-50 active:scale-[0.97]'
+                    ? 'bg-[#D97706] text-white border-[#D97706]'
+                    : 'bg-[#272D35] text-white/70 border-white/[0.08] hover:border-white/20 hover:text-white active:scale-[0.97]'
                 )}
               >
-                <span className={cn('text-sm font-semibold leading-snug', selected ? 'text-white' : 'text-gray-900')}>
+                <span className={cn('text-sm font-semibold leading-snug', selected ? 'text-white' : 'text-[#E7EDF2]')}>
                   {spec.label}
                 </span>
-                <span className={cn('text-xs mt-0.5 leading-none', selected ? 'text-amber-200' : 'text-gray-400')}>
+                <span className={cn('text-xs mt-0.5 leading-none', selected ? 'text-amber-200' : 'text-white/30')}>
                   {spec.sublabel}
                 </span>
               </button>
@@ -150,9 +155,9 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
 
       {/* ── Custom filter volume input ───────────────────────────── */}
       {isCustom && (
-        <div className="bg-amber-50 rounded-xl border border-amber-200 px-4 py-4 space-y-3">
+        <div className="border border-white/[0.08] bg-[#D97706]/[0.06] px-4 py-4 space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-[11px] font-bold text-white/40 uppercase tracking-[0.12em] mb-2">
               Volume (ml)
             </label>
             <input
@@ -164,11 +169,11 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
               max="800"
               step="25"
               autoFocus
-              className="w-full h-11 rounded-xl border border-amber-300 bg-white px-4 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className={cn(inputBase, 'border-[#D97706]/30 focus:border-[#D97706]/50')}
             />
           </div>
           {customCalc && (
-            <div className="flex gap-4 text-sm text-amber-800">
+            <div className="flex gap-4 text-sm text-amber-400">
               <span>☕ <strong>{customCalc.coffeeG} g</strong> coffee</span>
               <span>⚡ <strong>~{customCalc.caffeineMg} mg</strong> caffeine</span>
             </div>
@@ -176,9 +181,9 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
         </div>
       )}
 
-      {/* ── Cups (hidden when 1 to reduce friction; tap to show) ── */}
+      {/* ── Servings ─────────────────────────────────────────────── */}
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-3">
+        <p className="text-[11px] font-bold text-white/40 uppercase tracking-[0.12em] mb-3">
           Servings
         </p>
         <div className="flex items-center gap-4">
@@ -186,20 +191,22 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
             type="button"
             onClick={() => adjustCups(-1)}
             disabled={cups <= 1}
-            className="w-11 h-11 rounded-xl border border-gray-200 bg-white text-xl font-medium text-gray-700 flex items-center justify-center hover:bg-gray-50 disabled:opacity-30"
+            className="w-11 h-11 border border-white/[0.08] bg-[#272D35] text-xl font-medium text-white/70 flex items-center justify-center hover:bg-white/[0.06] disabled:opacity-30 transition-colors"
           >
             −
           </button>
-          <span className="text-2xl font-bold text-gray-900 w-10 text-center">{cups}</span>
+          <span className="text-2xl font-bold text-white font-mono w-10 text-center tabular-nums">{cups}</span>
           <button
             type="button"
             onClick={() => adjustCups(1)}
-            className="w-11 h-11 rounded-xl border border-gray-200 bg-white text-xl font-medium text-gray-700 flex items-center justify-center hover:bg-gray-50"
+            className="w-11 h-11 border border-white/[0.08] bg-[#272D35] text-xl font-medium text-white/70 flex items-center justify-center hover:bg-white/[0.06] transition-colors"
           >
             +
           </button>
           {cups > 1 && (
-            <span className="text-sm text-gray-400">× {COFFEE_SPECS[coffeeType as keyof typeof COFFEE_SPECS]?.label ?? coffeeType}</span>
+            <span className="text-sm text-white/30">
+              × {COFFEE_SPECS[coffeeType as keyof typeof COFFEE_SPECS]?.label ?? coffeeType}
+            </span>
           )}
         </div>
       </div>
@@ -207,39 +214,41 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
       {/* ── Date + time ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+          <label className="block text-[11px] font-bold text-white/40 uppercase tracking-[0.12em] mb-2">Date</label>
           <input
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            className="w-full h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className={inputBase}
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Time</label>
+          <label className="block text-[11px] font-bold text-white/40 uppercase tracking-[0.12em] mb-2">Time</label>
           <input
             type="time"
             value={time}
             onChange={e => setTime(e.target.value)}
-            className="w-full h-11 rounded-xl border border-gray-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className={inputBase}
           />
         </div>
       </div>
 
       {/* ── Caffeine override ─────────────────────────────────────── */}
       <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="text-sm font-medium text-gray-700">Caffeine (mg)</label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-[11px] font-bold text-white/40 uppercase tracking-[0.12em]">
+            Caffeine (mg)
+          </label>
           {caffeineManual ? (
             <button
               type="button"
               onClick={() => setCaffeineManual(false)}
-              className="text-xs text-amber-600 hover:text-amber-700"
+              className="text-xs text-[#D97706] hover:text-amber-400 transition-colors"
             >
               Reset to estimate
             </button>
           ) : (
-            <span className="text-xs text-gray-400">Estimated · tap to override</span>
+            <span className="text-xs text-white/25">Estimated · tap to override</span>
           )}
         </div>
         <input
@@ -250,31 +259,37 @@ export function AddCoffeeForm({ returnTo = '/today' }: Props) {
           min="0"
           max="2000"
           className={cn(
-            'w-full h-11 rounded-xl border bg-white px-4 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500',
-            caffeineManual ? 'border-amber-400' : 'border-gray-300'
+            inputBase,
+            caffeineManual ? 'border-[#D97706]/40' : ''
           )}
         />
       </div>
 
       {/* ── Notes ────────────────────────────────────────────────── */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">Notes (optional)</label>
+        <label className="block text-[11px] font-bold text-white/40 uppercase tracking-[0.12em] mb-2">
+          Notes (optional)
+        </label>
         <textarea
           value={notes}
           onChange={e => setNotes(e.target.value)}
           placeholder="e.g. pre-workout, afternoon, with oat milk"
           rows={2}
-          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none placeholder:text-gray-400"
+          className={
+            'w-full border border-white/[0.08] bg-[#272D35] px-4 py-3 ' +
+            'text-sm text-[#E7EDF2] placeholder:text-white/30 ' +
+            'focus:outline-none focus:border-white/20 focus:ring-1 focus:ring-white/10 resize-none transition-colors'
+          }
         />
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-[#E5173F]">{error}</p>}
 
       <button
         type="button"
         onClick={handleSave}
         disabled={saving}
-        className="w-full h-12 bg-amber-600 text-white text-sm font-semibold rounded-xl hover:bg-amber-700 disabled:opacity-50 transition-colors shadow-sm"
+        className="w-full h-12 bg-[#D97706] text-white text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 transition-colors"
       >
         {saving ? 'Saving…' : '☕ Save coffee'}
       </button>

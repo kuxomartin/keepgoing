@@ -251,7 +251,7 @@ export function TodayConsole(props: TodayConsoleProps) {
         <button
           type="button"
           onClick={() => { setTimeOpen(true); setTimeVal(nowLocal()) }}
-          className="text-[10px] font-medium text-white/25 uppercase tracking-[0.12em] hover:text-white/50 transition-colors"
+          className="text-[10px] font-medium text-white/50 uppercase tracking-[0.12em] hover:text-white/80 transition-colors"
         >
           Time
         </button>
@@ -273,7 +273,7 @@ export function TodayConsole(props: TodayConsoleProps) {
         <button
           type="button"
           onClick={() => { setTimeVal(''); setTimeOpen(false) }}
-          className="text-white/30 hover:text-white/60 text-sm leading-none"
+          className="text-white/50 hover:text-white/80 text-sm leading-none"
           aria-label="Clear time"
         >
           ×
@@ -293,7 +293,7 @@ export function TodayConsole(props: TodayConsoleProps) {
       {(props.todayCalories != null || props.todayProtein != null || props.actMinsToday > 0) && (
         <div className="mb-5 pb-5 border-b border-white/8">
           {props.todayCalories != null && (
-            <p className="text-2xl font-bold text-white tabular-nums leading-none mb-1">
+            <p className="text-2xl font-bold text-white font-mono tabular-nums leading-none mb-1">
               {props.todayCalories.toLocaleString()}
               <span className="text-sm font-normal text-white/30 ml-1.5">kcal</span>
             </p>
@@ -316,7 +316,7 @@ export function TodayConsole(props: TodayConsoleProps) {
             onClick={() => setMealType(key)}
             className={cn(
               'text-sm transition-colors',
-              mealType === key ? 'text-white font-semibold' : 'text-white/30 hover:text-white/60',
+              mealType === key ? 'text-white font-semibold' : 'text-white/50 hover:text-white/80',
             )}
           >
             {label}
@@ -348,7 +348,7 @@ export function TodayConsole(props: TodayConsoleProps) {
             type="button"
             onClick={runEstimate}
             disabled={!foodDesc.trim() || estimating}
-            className="text-xs text-white/30 hover:text-white/60 transition-colors disabled:opacity-20"
+            className="text-xs text-white/50 hover:text-white/80 transition-colors disabled:opacity-30"
           >
             {estimating ? 'Estimating…' : 'Estimate calories →'}
           </button>
@@ -374,7 +374,7 @@ export function TodayConsole(props: TodayConsoleProps) {
         </button>
       )}
 
-      <a href="/food" className="mt-auto pt-5 text-[10px] text-white/20 hover:text-white/40 transition-colors">
+      <a href="/food" className="mt-auto pt-5 text-[10px] text-white/40 hover:text-white/60 transition-colors">
         Full intake page →
       </a>
     </div>
@@ -390,7 +390,7 @@ export function TodayConsole(props: TodayConsoleProps) {
       {/* Today's coffee summary */}
       {props.coffeeCups > 0 && (
         <div className="mb-5 pb-5 border-b border-white/8">
-          <p className="text-2xl font-bold text-white tabular-nums leading-none mb-1">
+          <p className="text-2xl font-bold text-white font-mono tabular-nums leading-none mb-1">
             {props.coffeeCups % 1 === 0 ? props.coffeeCups : props.coffeeCups.toFixed(1)}
             <span className="text-sm font-normal text-white/30 ml-1.5">cup{props.coffeeCups !== 1 ? 's' : ''}</span>
           </p>
@@ -427,7 +427,7 @@ export function TodayConsole(props: TodayConsoleProps) {
         {renderTimeControl(coffeeTimeVal, setCoffeeTimeVal, coffeeTimeOpen, setCoffeeTimeOpen)}
       </div>
 
-      <a href="/coffee/add?from=today" className="mt-auto pt-4 text-[10px] text-white/20 hover:text-white/40 transition-colors">
+      <a href="/coffee/add?from=today" className="mt-auto pt-4 text-[10px] text-white/40 hover:text-white/60 transition-colors">
         More options →
       </a>
     </div>
@@ -443,7 +443,7 @@ export function TodayConsole(props: TodayConsoleProps) {
       {weightStatus === 'saved' ? (
         <div className="mb-4">
           <div className="flex items-baseline gap-2">
-            <span className="font-display font-bold text-white tabular-nums leading-none" style={{ fontSize: '3rem' }}>
+            <span className="font-bold text-white font-mono tabular-nums leading-none" style={{ fontSize: '3rem' }}>
               {weightVal}
             </span>
             <span className="text-sm text-white/30">kg</span>
@@ -464,7 +464,7 @@ export function TodayConsole(props: TodayConsoleProps) {
                 if (e.key === 'Escape') { setWeightEditing(false) }
               }}
               onBlur={() => { if (!weightSaving.current) saveWeight() }}
-              className="font-display font-bold text-white tabular-nums leading-none bg-transparent border-0 focus:outline-none w-32"
+              className="font-bold text-white font-mono tabular-nums leading-none bg-transparent border-0 focus:outline-none w-32"
               style={{ fontSize: '3rem' }}
             />
             <span className="text-sm text-white/30">kg</span>
@@ -473,7 +473,7 @@ export function TodayConsole(props: TodayConsoleProps) {
           <div className="mb-3">
             {renderTimeControl(weightTimeVal, setWeightTimeVal, weightTimeOpen, setWeightTimeOpen)}
           </div>
-          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-2">Enter to save</p>
+          <p className="text-[10px] text-white/50 uppercase tracking-[0.12em] mb-2">Enter to save</p>
           <button
             type="button"
             onClick={saveWeight}
@@ -487,7 +487,7 @@ export function TodayConsole(props: TodayConsoleProps) {
           <button type="button" onClick={openWeightEdit} className="text-left group mb-3">
             <div className="flex items-baseline gap-2">
               <span
-                className="font-display font-bold tabular-nums leading-none transition-colors group-hover:text-white/60"
+                className="font-bold font-mono tabular-nums leading-none transition-colors group-hover:text-white/60"
                 style={{ fontSize: '3rem', color: weightVal ? 'white' : 'rgba(255,255,255,0.2)' }}
               >
                 {weightVal || '——'}
@@ -515,7 +515,7 @@ export function TodayConsole(props: TodayConsoleProps) {
 
       {props.ydayCalories != null ? (
         <div className="mb-5">
-          <p className="text-2xl font-bold text-white tabular-nums leading-none mb-1">
+          <p className="text-2xl font-bold text-white font-mono tabular-nums leading-none mb-1">
             {Math.round(props.ydayCalories).toLocaleString()}
             <span className="text-sm font-normal text-white/30 ml-1.5">kcal</span>
           </p>
@@ -557,7 +557,7 @@ export function TodayConsole(props: TodayConsoleProps) {
   // ═══════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="bg-[#0D0D0D] border-t border-white/8">
+    <div className="bg-[#20252B] border-t border-white/8">
 
       {/* ── MOBILE: tab switcher ──────────────────────────────────────── */}
       <div className="lg:hidden">
@@ -569,7 +569,7 @@ export function TodayConsole(props: TodayConsoleProps) {
               onClick={() => setMobileTab(tab)}
               className={cn(
                 'flex-1 py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-colors',
-                mobileTab === tab ? 'text-white' : 'text-white/30 hover:text-white/60',
+                mobileTab === tab ? 'text-white' : 'text-white/50 hover:text-white/80',
               )}
             >
               {tab}

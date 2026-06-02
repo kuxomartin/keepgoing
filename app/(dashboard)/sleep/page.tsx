@@ -14,6 +14,17 @@ import {
   formatMinutes,
   type CauseExplorerContext,
 } from '@/lib/calculations/sleep-verdict'
+import {
+  computeSleepDebt,
+  computeConsistency,
+  computeSleepVsHrv,
+  computeSleepVsCaffeine,
+  computeSleepVsDeficit,
+  computeSleepVsTraining,
+  computeSleepCoach,
+  type SleepInsight,
+  type CoachCard,
+} from '@/lib/calculations/sleep-intelligence'
 import type { SleepRecord } from '@/types/database'
 
 function avg(vals: (number | null)[]): number | null {
@@ -24,7 +35,7 @@ function avg(vals: (number | null)[]): number | null {
 // Trend labels — no green (not in palette). Black=good, gray=stable, red=declining.
 function trendLabel(key: string): { text: string; cls: string } {
   return ({
-    green: { text: '↑ improving', cls: 'text-[#0D0D0D] dark:text-zinc-100' },
+    green: { text: '↑ improving', cls: 'text-[#E7EDF2] dark:text-zinc-100' },
     amber: { text: '↓ declining', cls: 'text-[#E5173F]' },
     red:   { text: '↓ declining', cls: 'text-[#E5173F]' },
     blue:  { text: '→ stable',   cls: 'text-[#888888]' },
@@ -87,16 +98,23 @@ export default async function SleepPage() {
 
   const verdict = getSleepVerdict(latest)
 
-  // Cause explorer context
+  // Cause explorer + intelligence data (all parallel)
   const [
     { data: coffeePrev }, { data: foodPrev }, { data: actPrev },
     { data: checkinPrev }, { data: hmPrev },
+    { data: hmAll30d }, { data: coffeeAll30d }, { data: foodAll30d },
+    { data: activitiesAll30d },
   ] = await Promise.all([
     supabase.from('coffee_logs').select('consumed_at, caffeine_mg').eq('date', yesterday),
     supabase.from('food_logs').select('estimated_calories, eaten_at').eq('date', yesterday),
     supabase.from('activities').select('duration_minutes').gte('start_time', yesterday + 'T00:00:00').lte('start_time', yesterday + 'T23:59:59'),
     supabase.from('daily_checkins').select('digestion, energy').eq('date', yesterday).limit(1),
     supabase.from('health_metrics').select('hrv_ms, active_energy_kcal, resting_energy_kcal').eq('date', yesterday).eq('source', 'google_sheets').limit(1),
+    // Intelligence queries
+    supabase.from('health_metrics').select('date, hrv_ms, active_energy_kcal, resting_energy_kcal').gte('date', d30ago).lte('date', today).eq('source', 'google_sheets'),
+    supabase.from('coffee_logs').select('date, consumed_at').gte('date', d30ago).lte('date', today),
+    supabase.from('food_logs').select('date, estimated_calories').gte('date', d30ago).lte('date', today),
+    supabase.from('activities').select('start_time, duration_minutes, avg_hr, activity_type').gte('start_time', d30ago + 'T00:00:00').lte('start_time', today + 'T23:59:59'),
   ])
 
   let causeCtx: CauseExplorerContext | null = null
@@ -115,7 +133,6 @@ export default async function SleepPage() {
     const estimatedBurn    = hm ? (hm.active_energy_kcal ?? 0) + (hm.resting_energy_kcal ?? 0) || null : null
     const { data: hmHistory } = await supabase.from('health_metrics').select('hrv_ms').gte('date', d14ago).lte('date', yesterday).eq('source', 'google_sheets')
     const baselineHrv = avg((hmHistory ?? []).map(r => r.hrv_ms ? Number(r.hrv_ms) : null))
-    // Attach lastCoffeeTime for rich card display
     void lastCoffeeTime
     causeCtx = {
       record: latest, lastCoffeeHour, totalCaffeineMg: totalCaffeine, totalCalories,
@@ -126,35 +143,51 @@ export default async function SleepPage() {
     }
   }
 
-  const cause = causeCtx ? analyzeSleepCauses(causeCtx) : null
+  const cause   = causeCtx ? analyzeSleepCauses(causeCtx) : null
   const hasData = sleepRecords.length > 0
 
-  // Patterns — only show if there's an actual insight
-  const hasEnoughForPatterns = sleepRecords.length >= 7
-  const { data: allCoffee } = hasEnoughForPatterns
-    ? await supabase.from('coffee_logs').select('date, consumed_at').gte('date', d30ago).lte('date', today)
-    : { data: null }
+  // ── Intelligence analyses (new sections) ───────────────────────────────────
+  const sleepDebt   = computeSleepDebt(records14)
+  const consistency = computeConsistency(records14)
 
-  let patternText: string | null = null
-  if (hasEnoughForPatterns && allCoffee) {
-    const lateCoffeeDates = new Set(allCoffee.filter(c => parseInt(c.consumed_at.slice(11, 13), 10) >= 14).map(c => c.date))
-    const afterLate  = sleepRecords.filter(r => lateCoffeeDates.has(r.date) && r.asleep_minutes != null)
-    const afterEarly = sleepRecords.filter(r => !lateCoffeeDates.has(r.date) && r.asleep_minutes != null)
-    if (afterLate.length >= 3 && afterEarly.length >= 3) {
-      const avgL = avg(afterLate.map(r => r.asleep_minutes))
-      const avgE = avg(afterEarly.map(r => r.asleep_minutes))
-      if (avgL != null && avgE != null && Math.abs(avgL - avgE) >= 20) {
-        const diff = Math.round(Math.abs(avgL - avgE))
-        patternText = avgL < avgE
-          ? `Nights following late caffeine (after 14:00) seem associated with ${diff} fewer minutes of sleep on average across ${afterLate.length} recorded nights.`
-          : null
-      }
-    }
+  const intakeByDate: Record<string, number> = {}
+  for (const f of foodAll30d ?? []) {
+    const row = f as { date: string; estimated_calories?: number }
+    intakeByDate[row.date] = (intakeByDate[row.date] ?? 0) + (row.estimated_calories ?? 0)
   }
+  const burnByDate: Record<string, number> = {}
+  for (const m of hmAll30d ?? []) {
+    const row = m as { date: string; active_energy_kcal?: number; resting_energy_kcal?: number }
+    const burn = (row.active_energy_kcal ?? 0) + (row.resting_energy_kcal ?? 0)
+    if (burn > 0) burnByDate[row.date] = burn
+  }
+
+  const intelligenceInsights: SleepInsight[] = []
+  const i1 = computeSleepVsHrv(sleepRecords, (hmAll30d ?? []) as Array<{ date: string; hrv_ms: number | string | null }>)
+  if (i1) intelligenceInsights.push(i1)
+  const i2 = computeSleepVsCaffeine(sleepRecords, (coffeeAll30d ?? []) as Array<{ date: string; consumed_at: string }>)
+  if (i2) intelligenceInsights.push(i2)
+  const i3 = computeSleepVsDeficit(sleepRecords, intakeByDate, burnByDate)
+  if (i3) intelligenceInsights.push(i3)
+  const i4 = computeSleepVsTraining(sleepRecords, (activitiesAll30d ?? []) as Array<{ start_time: string; duration_minutes: number | null; avg_hr: number | null; activity_type: string }>)
+  if (i4) intelligenceInsights.push(i4)
+
+  const coachCards = computeSleepCoach({
+    debt:          sleepDebt,
+    consistency,
+    insights:      intelligenceInsights,
+    avgEfficiency: avg14Eff,
+  })
+
+  // Patterns (legacy, kept for Zone 5)
+  const patternCaffeineInsight = intelligenceInsights.find(i => i.id === 'sleep-caffeine')
+  const patternText = patternCaffeineInsight?.difference.includes('fewer')
+    ? `Nights following late caffeine (after 14:00) are associated with ${patternCaffeineInsight.difference.match(/(\d+) fewer/)?.[1] ?? '?'} fewer minutes of sleep on average.`
+    : null
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col bg-[#0D0D0D]">
+    <div className="flex flex-col bg-[#151A20]">
 
       {/* ══ ZONE 1 — Hero (dark) ═══════════════════════════════════════════════ */}
       <div className="pt-10 pb-10">
@@ -164,7 +197,7 @@ export default async function SleepPage() {
             <span className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em]">Sleep</span>
             {latestDate && (
               <span className="text-[10px] text-white/25 uppercase tracking-[0.12em]">
-                — {format(new Date(latestDate + 'T12:00:00'), 'MMMM d')}
+                — Night ending {format(new Date(latestDate + 'T12:00:00'), 'd MMM yyyy')}
               </span>
             )}
           </div>
@@ -192,7 +225,7 @@ export default async function SleepPage() {
                   {verdict.facts.map(fact => (
                     <div key={fact.label}>
                       <div
-                        className="font-display font-bold text-white tabular-nums leading-none"
+                        className="font-bold text-white font-mono tabular-nums leading-none"
                         style={{ fontSize: '2.25rem' }}
                       >
                         {fact.value}
@@ -221,8 +254,8 @@ export default async function SleepPage() {
                     Sleep Cause Explorer
                   </p>
                   <h2
-                    className="font-display font-bold text-white mb-2"
-                    style={{ fontSize: 'clamp(1.5rem, 2.5vw, 2.25rem)', letterSpacing: '-0.025em', lineHeight: 1.1 }}
+                    className="font-black text-white mb-2 text-2xl sm:text-3xl"
+                    style={{ lineHeight: 1.0 }}
                   >
                     What may have affected your sleep.
                   </h2>
@@ -240,12 +273,12 @@ export default async function SleepPage() {
                     cause.contributors.length === 1 ? 'grid-cols-1 max-w-xl' : 'grid-cols-1 lg:grid-cols-2'
                   )}>
                     {cause.contributors.map((c, i) => (
-                      <div key={i} className="bg-[#181818] border border-white/[0.06]">
+                      <div key={i} className="bg-[#272D35] border border-white/[0.06]">
                         {/* Card header */}
                         <div className="px-8 pt-8 pb-6 border-b border-white/[0.06]">
                           <div className="flex items-start justify-between gap-4">
                             <h3
-                              className="font-display font-bold text-white uppercase leading-tight"
+                              className="font-bold text-white uppercase leading-tight"
                               style={{ fontSize: '1.375rem', letterSpacing: '-0.01em' }}
                             >
                               {c.factor}
@@ -337,22 +370,22 @@ export default async function SleepPage() {
                   ].filter(s => s.minutes != null && s.minutes > 0)
 
                   return (
-                    <div className="mt-8 border-t border-white/[0.06] pt-6">
-                      <p className="text-[10px] font-semibold text-white/20 uppercase tracking-[0.18em] mb-4">
+                    <div className="mt-10 border-t border-white/[0.08] pt-8">
+                      <p className="text-xs font-bold text-white/50 uppercase tracking-[0.15em] mb-6">
                         Stage breakdown · typical adult ranges
                       </p>
-                      <div className="space-y-2">
+                      <div className="space-y-4">
                         {stages.map(s => {
                           const assessment = s.pct != null ? s.assess(s.pct) : null
                           const isNote = assessment && (assessment.includes('below') || assessment.includes('elevated') || assessment.includes('above'))
                           return (
-                            <div key={s.label} className="flex items-baseline gap-3 text-sm">
-                              <span className="text-white/40 w-12 flex-shrink-0">{s.label}</span>
-                              <span className="font-mono text-white/70 w-16 flex-shrink-0">{s.minutes ? formatMinutes(s.minutes) : '—'}</span>
-                              <span className="text-white/30 w-8 flex-shrink-0 tabular-nums">{s.pct != null ? `${s.pct}%` : ''}</span>
-                              <span className="text-white/20 text-xs w-24 flex-shrink-0">{s.ref}</span>
+                            <div key={s.label} className="flex items-baseline gap-4">
+                              <span className="text-white/60 w-14 flex-shrink-0 text-sm font-medium">{s.label}</span>
+                              <span className="font-mono text-white/80 w-16 flex-shrink-0 text-sm">{s.minutes ? formatMinutes(s.minutes) : '—'}</span>
+                              <span className="text-white/50 w-10 flex-shrink-0 font-mono tabular-nums text-sm">{s.pct != null ? `${s.pct}%` : ''}</span>
+                              <span className="text-white/35 text-xs w-28 flex-shrink-0">{s.ref}</span>
                               {assessment && (
-                                <span className={isNote ? 'text-[#FFB000] text-xs' : 'text-white/25 text-xs'}>
+                                <span className={isNote ? 'text-[#FFB000] text-sm font-medium' : 'text-white/40 text-sm'}>
                                   {assessment}
                                 </span>
                               )}
@@ -360,7 +393,7 @@ export default async function SleepPage() {
                           )
                         })}
                       </div>
-                      <p className="text-[10px] text-white/15 mt-4">
+                      <p className="text-xs text-white/30 mt-5">
                         Apple Watch sleep stage estimates are approximate. Typical ranges vary by age and individual.
                       </p>
                     </div>
@@ -370,12 +403,234 @@ export default async function SleepPage() {
             </div>
           )}
 
+          {/* ══ ZONE 3b — Sleep Debt + Consistency ═══════════════════════════════ */}
+          {(sleepDebt != null || consistency != null) && (
+            <div className="border-t border-white/[0.06] pt-10 pb-12">
+              <Container>
+                <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-8">
+                  Sleep Analysis
+                </p>
+                <div className={cn(
+                  'grid gap-4',
+                  sleepDebt && consistency ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-2xl'
+                )}>
+
+                  {/* Sleep Debt card */}
+                  {sleepDebt && (
+                    <div className="bg-[#272D35] border border-white/[0.06]">
+                      <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
+                        <h3 className="font-bold text-white uppercase leading-tight"
+                            style={{ fontSize: '1.25rem', letterSpacing: '-0.01em' }}>
+                          Sleep Debt
+                        </h3>
+                      </div>
+                      <div className="px-7 py-6 grid grid-cols-2 gap-x-8 gap-y-5 border-b border-white/[0.06]">
+                        <div>
+                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Average sleep</p>
+                          <p className="font-mono text-2xl font-bold text-white font-mono tabular-nums">{sleepDebt.avgHours}h</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Target</p>
+                          <p className="font-mono text-2xl font-bold text-white font-mono tabular-nums">{sleepDebt.targetHours}h</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Daily deficit</p>
+                          <p className={cn(
+                            'font-mono text-2xl font-bold font-mono tabular-nums',
+                            sleepDebt.dailyDeficitHours > 0.5 ? 'text-[#E5173F]'
+                              : sleepDebt.dailyDeficitHours > 0.1 ? 'text-[#FFB000]'
+                              : 'text-white'
+                          )}>
+                            {sleepDebt.dailyDeficitHours > 0 ? `-${sleepDebt.dailyDeficitHours}h` : 'None'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Est. accumulated</p>
+                          <p className={cn(
+                            'font-mono text-2xl font-bold font-mono tabular-nums',
+                            sleepDebt.accumulatedDebtHours > 5 ? 'text-[#E5173F]'
+                              : sleepDebt.accumulatedDebtHours > 2 ? 'text-[#FFB000]'
+                              : 'text-white'
+                          )}>
+                            {sleepDebt.accumulatedDebtHours > 0 ? `~${sleepDebt.accumulatedDebtHours}h` : 'None'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="px-7 py-5">
+                        <p className="text-sm text-white/50 leading-relaxed">{sleepDebt.interpretation}</p>
+                        <p className="text-[10px] text-white/20 mt-3">{sleepDebt.nightsAnalyzed} nights analysed · last 14 days</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Consistency card */}
+                  {consistency && (
+                    <div className="bg-[#272D35] border border-white/[0.06]">
+                      <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
+                        <div className="flex items-start justify-between gap-4">
+                          <h3 className="font-bold text-white uppercase leading-tight"
+                              style={{ fontSize: '1.25rem', letterSpacing: '-0.01em' }}>
+                            Consistency
+                          </h3>
+                          <span className={cn(
+                            'text-[10px] font-black uppercase tracking-[0.2em] flex-shrink-0 mt-0.5',
+                            consistency.rating === 'highly consistent' ? 'text-white/60'
+                              : consistency.rating === 'moderately consistent' ? 'text-[#FFB000]'
+                              : 'text-[#E5173F]'
+                          )}>
+                            {consistency.rating}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="px-7 py-6 grid grid-cols-2 gap-x-8 gap-y-5 border-b border-white/[0.06]">
+                        <div>
+                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Bedtime spread</p>
+                          <p className={cn(
+                            'font-mono text-2xl font-bold font-mono tabular-nums',
+                            consistency.bedtimeSpreadMin > 60 ? 'text-[#E5173F]'
+                              : consistency.bedtimeSpreadMin > 30 ? 'text-[#FFB000]'
+                              : 'text-white'
+                          )}>
+                            {consistency.bedtimeSpread}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-white/25 uppercase tracking-[0.12em] mb-1">Wake time spread</p>
+                          <p className={cn(
+                            'font-mono text-2xl font-bold font-mono tabular-nums',
+                            consistency.wakeSpreadMin > 60 ? 'text-[#E5173F]'
+                              : consistency.wakeSpreadMin > 30 ? 'text-[#FFB000]'
+                              : 'text-white'
+                          )}>
+                            {consistency.wakeSpread}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="px-7 py-5">
+                        <p className="text-sm text-white/50 leading-relaxed">{consistency.interpretation}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Container>
+            </div>
+          )}
+
+          {/* ══ ZONE 3c — Sleep Intelligence ══════════════════════════════════════ */}
+          {intelligenceInsights.length > 0 && (
+            <div className="border-t border-white/[0.06] pt-10 pb-12">
+              <Container>
+                <div className="mb-8">
+                  <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-3">
+                    Sleep Intelligence
+                  </p>
+                  <h2 className="font-black text-white text-2xl sm:text-3xl" style={{ lineHeight: 1.0 }}>
+                    Correlations from your data.
+                  </h2>
+                  <p className="text-sm text-white/35 mt-2">Association only — not causal. Requires sufficient nights recorded.</p>
+                </div>
+
+                <div className={cn(
+                  'grid gap-4',
+                  intelligenceInsights.length === 1 ? 'grid-cols-1 max-w-2xl' : 'grid-cols-1 lg:grid-cols-2'
+                )}>
+                  {intelligenceInsights.map(insight => (
+                    <div key={insight.id} className="bg-[#272D35] border border-white/[0.06]">
+                      <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
+                        <h3 className="font-bold text-white leading-tight"
+                            style={{ fontSize: '1.125rem', letterSpacing: '-0.01em' }}>
+                          {insight.title}
+                        </h3>
+                        <p className="font-mono text-[10px] text-white/30 mt-2">{insight.comparison}</p>
+                      </div>
+                      <div className="px-7 py-5 border-b border-white/[0.06]">
+                        <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1.5">Observed difference</p>
+                        <p className="font-bold text-white text-sm">{insight.difference}</p>
+                      </div>
+                      <div className="px-7 py-5">
+                        <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1.5">Interpretation</p>
+                        <p className="text-sm text-white/55 leading-relaxed">{insight.interpretation}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Container>
+            </div>
+          )}
+
+          {/* ══ ZONE 3d — Sleep Coach ═════════════════════════════════════════════ */}
+          {coachCards.length > 0 && (
+            <div className="border-t border-white/[0.06] pt-10 pb-12">
+              <Container>
+                <div className="mb-8">
+                  <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-3">
+                    Sleep Coach
+                  </p>
+                  <h2 className="font-black text-white text-2xl sm:text-3xl" style={{ lineHeight: 1.0 }}>
+                    Top opportunities.
+                  </h2>
+                  <p className="text-sm text-white/35 mt-2">Ranked by strongest observed signal.</p>
+                </div>
+
+                <div className={cn(
+                  'grid gap-4',
+                  coachCards.length === 1 ? 'grid-cols-1 max-w-2xl' : 'grid-cols-1 lg:grid-cols-3'
+                )}>
+                  {coachCards.map((card, i) => {
+                    const priorityLabel = card.priority === 'top' ? 'Top Opportunity'
+                      : card.priority === 'secondary' ? 'Secondary Opportunity'
+                      : 'Maintain'
+                    const priorityCls = card.priority === 'top' ? 'text-[#E5173F]'
+                      : card.priority === 'secondary' ? 'text-[#FFB000]'
+                      : 'text-white/40'
+                    return (
+                      <div key={i} className="bg-[#272D35] border border-white/[0.06]">
+                        <div className="px-6 pt-6 pb-4 border-b border-white/[0.06]">
+                          <p className={cn('text-[10px] font-black uppercase tracking-[0.18em] mb-2', priorityCls)}>
+                            {priorityLabel}
+                          </p>
+                          <h3 className="font-bold text-white leading-tight"
+                              style={{ fontSize: '1.0rem', letterSpacing: '-0.01em' }}>
+                            {card.label}
+                          </h3>
+                        </div>
+                        <div className="px-6 py-5 space-y-4">
+                          <div>
+                            <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1">Observation</p>
+                            <p className="text-sm text-white/60 leading-relaxed">{card.observation}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1">Recommendation</p>
+                            <p className="text-sm text-white/80 leading-relaxed font-medium">{card.recommendation}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1">Expected benefit</p>
+                            <p className="text-sm text-white/50 leading-relaxed">{card.benefit}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </Container>
+            </div>
+          )}
+
           {/* ══ ZONE 4 — Trends (light background) ══════════════════════════════ */}
-          <div className="bg-[#F2EDE6] dark:bg-zinc-900">
+          <div className="bg-[#20252B]">
             <Container className="py-12">
-              <p className="text-[10px] font-semibold text-[#888888] uppercase tracking-[0.18em] mb-10">
-                14-Day Trends
-              </p>
+              <div className="mb-10">
+                <p className="text-[10px] font-semibold text-[#888888] uppercase tracking-[0.18em]">
+                  {records14.filter(r => r.asleep_minutes != null).length >= 12
+                    ? '14-Day Trends'
+                    : 'Recent Sleep Trends'}
+                </p>
+                {records14.filter(r => r.asleep_minutes != null).length < 14 && (
+                  <p className="text-xs text-[#888888] mt-1">
+                    {records14.filter(r => r.asleep_minutes != null).length} nights recorded in the selected period.
+                  </p>
+                )}
+              </div>
 
               <div className="space-y-12">
                 {/* Duration — full width, most important */}
@@ -384,10 +639,10 @@ export default async function SleepPage() {
                     <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Sleep Duration</p>
                     <div className="flex gap-5 text-xs text-[#888888]">
                       {latest?.asleep_minutes != null && (
-                        <span>Last: <span className="font-semibold text-[#0D0D0D]">{formatMinutes(latest.asleep_minutes)}</span></span>
+                        <span>Last: <span className="font-semibold text-[#E7EDF2]">{formatMinutes(latest.asleep_minutes)}</span></span>
                       )}
                       {avg14Duration && (
-                        <span>14d avg: <span className="font-semibold text-[#0D0D0D]">{avg14Duration}h</span></span>
+                        <span>14d avg: <span className="font-semibold text-[#E7EDF2]">{avg14Duration}h</span></span>
                       )}
                       {trendLabel(durationTrend).text && (
                         <span className={cn('font-semibold', trendLabel(durationTrend).cls)}>
@@ -396,7 +651,7 @@ export default async function SleepPage() {
                       )}
                     </div>
                   </div>
-                  <SleepChart data={durationData} chartHeight={200} />
+                  <SleepChart data={durationData} chartHeight={200} onDark />
                 </div>
 
                 {/* 2-col: Efficiency | Wake Count */}
@@ -406,10 +661,10 @@ export default async function SleepPage() {
                       <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Efficiency</p>
                       <div className="flex gap-4 text-xs text-[#888888]">
                         {latest?.efficiency_pct != null && (
-                          <span>Last: <span className="font-semibold text-[#0D0D0D]">{Math.round(Number(latest.efficiency_pct))}%</span></span>
+                          <span>Last: <span className="font-semibold text-[#E7EDF2]">{Math.round(Number(latest.efficiency_pct))}%</span></span>
                         )}
                         {avg14Eff != null && (
-                          <span>Avg: <span className="font-semibold text-[#0D0D0D]">{avg14Eff}%</span></span>
+                          <span>Avg: <span className="font-semibold text-[#E7EDF2]">{avg14Eff}%</span></span>
                         )}
                         {trendLabel(effTrend).text && (
                           <span className={cn('font-semibold', trendLabel(effTrend).cls)}>{trendLabel(effTrend).text}</span>
@@ -424,10 +679,10 @@ export default async function SleepPage() {
                       <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Wake Count</p>
                       <div className="flex gap-4 text-xs text-[#888888]">
                         {latest?.wake_count != null && (
-                          <span>Last: <span className="font-semibold text-[#0D0D0D]">{latest.wake_count}</span></span>
+                          <span>Last: <span className="font-semibold text-[#E7EDF2]">{latest.wake_count}</span></span>
                         )}
                         {avg14Wakes != null && (
-                          <span>Avg: <span className="font-semibold text-[#0D0D0D]">{avg14Wakes}</span></span>
+                          <span>Avg: <span className="font-semibold text-[#E7EDF2]">{avg14Wakes}</span></span>
                         )}
                       </div>
                     </div>
@@ -444,14 +699,14 @@ export default async function SleepPage() {
                           <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Deep Sleep</p>
                           <div className="flex gap-4 text-xs text-[#888888]">
                             {latest?.deep_minutes != null && (
-                              <span>Last: <span className="font-semibold text-[#0D0D0D]">{formatMinutes(latest.deep_minutes)}</span></span>
+                              <span>Last: <span className="font-semibold text-[#E7EDF2]">{formatMinutes(latest.deep_minutes)}</span></span>
                             )}
                             {avg14Deep != null && (
-                              <span>Avg: <span className="font-semibold text-[#0D0D0D]">{avg14Deep}h</span></span>
+                              <span>Avg: <span className="font-semibold text-[#E7EDF2]">{avg14Deep}h</span></span>
                             )}
                           </div>
                         </div>
-                        <SleepChart data={deepData} maxHours={2} fixedColor="#0D0D0D" chartHeight={200} />
+                        <SleepChart data={deepData} maxHours={2} fixedColor="#55606C" chartHeight={200} onDark />
                       </div>
                     )}
 
@@ -461,9 +716,9 @@ export default async function SleepPage() {
                           <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Avg Sleep HRV</p>
                           <div className="flex gap-4 text-xs text-[#888888]">
                             {latest?.avg_hrv != null && (
-                              <span>Last: <span className="font-semibold text-[#0D0D0D]">{Math.round(Number(latest.avg_hrv))} ms</span></span>
+                              <span>Last: <span className="font-semibold text-[#E7EDF2]">{Math.round(Number(latest.avg_hrv))} ms</span></span>
                             )}
-                            <span>Avg: <span className="font-semibold text-[#0D0D0D]">{Math.round(avg14Hrv)} ms</span></span>
+                            <span>Avg: <span className="font-semibold text-[#E7EDF2]">{Math.round(avg14Hrv)} ms</span></span>
                           </div>
                         </div>
                         <SleepEfficiencyChart
@@ -482,7 +737,7 @@ export default async function SleepPage() {
           </div>
 
           {/* ══ ZONE 5 — Patterns (only show real findings) + Experiments ════════ */}
-          <div className="bg-[#0D0D0D]">
+          <div className="bg-[#151A20]">
             <Container className="py-12 space-y-12">
 
               {/* Patterns — only shown when a real finding exists */}
@@ -512,7 +767,7 @@ export default async function SleepPage() {
                     { title: 'Zone 2 after hard days',          d: '2 weeks', desc: 'Light 30–40 min activity instead of full rest. Observe next-day HRV.' },
                     { title: 'Reduce deficit on training days', d: '10 days', desc: 'Keep calorie deficit under 400–500 kcal on heavy training days.' },
                   ].map(exp => (
-                    <div key={exp.title} className="bg-[#141414] border border-white/[0.06] px-5 py-4">
+                    <div key={exp.title} className="bg-[#272D35] border border-white/[0.06] px-5 py-4">
                       <div className="flex items-start justify-between gap-3 mb-2">
                         <h4 className="text-sm font-semibold text-white leading-tight">{exp.title}</h4>
                         <span className="text-[10px] text-white/25 uppercase tracking-widest flex-shrink-0 mt-0.5">{exp.d}</span>
