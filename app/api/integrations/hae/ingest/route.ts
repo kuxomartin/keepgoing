@@ -193,46 +193,52 @@ function normalizeHAETimestamp(raw: unknown): string | null {
 function processWorkouts(
   workouts: unknown[],
   userId: string
-): Record<string, unknown>[] {
+): { rows: Record<string, unknown>[]; skipped: number } {
   const rows: Record<string, unknown>[] = []
+  let skipped = 0
 
   for (const w of workouts) {
     const workout = w as Record<string, unknown>
 
-    const uuid = typeof workout.uuid === 'string' && workout.uuid.trim()
-      ? workout.uuid.trim() : null
-    if (!uuid) continue   // no external_id → can't upsert idempotently
-
-    // Activity type
+    // ── Activity type ─────────────────────────────────────────────────────────
     const rawType = typeof workout.workoutActivityType === 'string'
       ? workout.workoutActivityType : ''
     const activityType = WORKOUT_TYPE_MAP[rawType] ?? 'other'
 
-    // Start time (required for activities table)
+    // ── Start time — try both 'start' and 'startDate' ─────────────────────────
     const startTime = normalizeHAETimestamp(workout.start)
-    if (!startTime) continue
+                   ?? normalizeHAETimestamp(workout.startDate)
+    if (!startTime) { skipped++; continue }
 
-    // Duration: HAE sends seconds
+    // ── External ID — try uuid → id → generate stable fallback ───────────────
+    // HAE should send uuid but some configurations omit it; a deterministic
+    // fallback lets us upsert idempotently even without an explicit UUID.
+    const rawUuid =
+      (typeof workout.uuid === 'string' && workout.uuid.trim())     ? workout.uuid.trim()     :
+      (typeof workout.id   === 'string' && workout.id.trim())       ? workout.id.trim()       :
+      null
+    const externalId = rawUuid ?? `hae_${userId}_${startTime}_${activityType}`.replace(/[^a-zA-Z0-9_-]/g, '_')
+
+    // ── Duration: HAE sends seconds ───────────────────────────────────────────
     const durationSec = getQty(workout.duration)
     const durationMin = durationSec != null && durationSec > 0
       ? Math.round(durationSec / 60)
       : (() => {
-          // Fallback: compute from end − start
-          const endMs   = parseHAETimestampMs(workout.end)
-          const startMs = parseHAETimestampMs(workout.start)
+          const endMs   = parseHAETimestampMs(workout.end ?? workout.endDate)
+          const startMs = parseHAETimestampMs(workout.start ?? workout.startDate)
           return (endMs != null && startMs != null && endMs > startMs)
             ? Math.round((endMs - startMs) / 60_000)
             : null
         })()
 
-    // Title: prefer HAE name, fall back to type label
+    // ── Title ─────────────────────────────────────────────────────────────────
     const typeLabel = activityType.charAt(0).toUpperCase() + activityType.slice(1).replace(/_/g, ' ')
-    const startDate  = startTime.slice(0, 10)
+    const startDate = startTime.slice(0, 10)
     const title = (typeof workout.name === 'string' && workout.name.trim())
       ? workout.name.trim()
       : `${typeLabel} — ${startDate}`
 
-    // Optional fields
+    // ── Optional metrics ──────────────────────────────────────────────────────
     const distanceKm = getDistanceKm(workout.totalDistance ?? workout.distance)
     const calories   = getQty(workout.activeEnergyBurned ?? workout.totalEnergyBurned)
     const avgHr      = getQty(workout.avgHeartRate ?? workout.averageHeartRate)
@@ -241,7 +247,7 @@ function processWorkouts(
     rows.push({
       user_id:          userId,
       source:           'apple_health_workout',
-      external_id:      uuid,
+      external_id:      externalId,
       activity_type:    activityType,
       title,
       start_time:       startTime,
@@ -260,7 +266,7 @@ function processWorkouts(
     })
   }
 
-  return rows
+  return { rows, skipped }
 }
 
 // ── Sleep analysis processor ──────────────────────────────────────────────────
@@ -565,12 +571,22 @@ export async function POST(request: Request) {
     : []
 
   // ── 9b. Process workouts ──────────────────────────────────────────────────
-  const workoutRows = workoutsRaw.length > 0
+  const { rows: workoutRows, skipped: workoutsSkipped } = workoutsRaw.length > 0
     ? processWorkouts(workoutsRaw, userId)
-    : []
+    : { rows: [], skipped: 0 }
 
   // ── 10. Guard: at least something recognised ──────────────────────────────
+  // Workouts present but all invalid → still 200, not 422 (per HAE requirements:
+  // workout-only exports must succeed even if all rows are skipped with explanation).
   if (datesFound.length === 0 && sleepResults.length === 0 && workoutRows.length === 0) {
+    if (workoutsRaw.length > 0) {
+      return NextResponse.json({
+        ok: false,
+        error: `Found ${workoutsRaw.length} workout(s) but none could be imported — missing start time on all entries. Check that the HAE workout automation includes start/end timestamps.`,
+        workoutsFound:   workoutsRaw.length,
+        workoutsSkipped: workoutsRaw.length,
+      }, { status: 200 })
+    }
     return NextResponse.json(
       { ok: false, error: 'No recognized metric or sleep data found in payload.' },
       { status: 422 }
@@ -680,7 +696,8 @@ export async function POST(request: Request) {
     metricsImported,
     rowsImported:    totalRows,
     ...(sleepDates.length    > 0 ? { sleepDates }                                   : {}),
-    ...(workoutsImported     > 0 ? { workoutsImported, workoutsQueued: workoutRows.length } : {}),
+    ...(workoutsImported     > 0 ? { workoutsImported, workoutsQueued: workoutRows.length }         : {}),
+    ...(workoutsSkipped      > 0 ? { workoutsSkipped }                                              : {}),
     ...(metricsIgnored.length > 0 ? { metricsIgnored }                               : {}),
   })
 }
