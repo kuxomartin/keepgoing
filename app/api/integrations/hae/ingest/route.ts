@@ -56,29 +56,6 @@ interface RowFields {
   respiratory_rate:    number | null
 }
 
-// ── Sleep stage → accumulator key ────────────────────────────────────────────
-
-const SLEEP_STAGE_MAP: Record<string, 'inBed' | 'core' | 'rem' | 'deep' | 'awake' | 'unspecified'> = {
-  inBed:             'inBed',
-  asleepCore:        'core',
-  asleepREM:         'rem',
-  asleepDeep:        'deep',
-  awake:             'awake',
-  asleepUnspecified: 'unspecified',
-}
-
-interface SleepAccum {
-  inBed:        number
-  core:         number
-  rem:          number
-  deep:         number
-  awake:        number
-  unspecified:  number
-  inBedStartMs: number | null   // earliest inBed start (ms since epoch)
-  firstSleepMs: number | null   // earliest sleep-stage start (ms)
-  latestEndMs:  number | null   // latest end timestamp across all stages
-  endDateStr:   string | null   // raw endDate string of the inBed sample
-}
 
 // ── Aggregation helpers ───────────────────────────────────────────────────────
 
@@ -124,6 +101,17 @@ function parseHAETimestampMs(raw: unknown): number | null {
 }
 
 // ── Sleep analysis processor ──────────────────────────────────────────────────
+//
+// HAE sends sleep_analysis as aggregated nightly objects (NOT stage-by-stage).
+// Each object represents one sleep episode with pre-computed stage durations
+// already in HOURS (core, rem, deep, awake, totalSleep).
+//
+// Example object:
+//   { date, sleepStart, sleepEnd, inBedEnd, inBed,
+//     totalSleep, core, rem, deep, awake, source }
+//
+// Values are in hours. Multiply by 60 to get minutes.
+// date.slice(0,10) is the wake-up date — no timezone conversion.
 
 interface SleepResult {
   date: string
@@ -134,106 +122,118 @@ interface SleepResult {
 function processSleepAnalysis(
   dataPoints: unknown[],
   userId: string
-): SleepResult | null {
-  // Single accumulator — HAE is expected to send one night at a time.
-  const acc: SleepAccum = {
-    inBed: 0, core: 0, rem: 0, deep: 0, awake: 0, unspecified: 0,
-    inBedStartMs: null, firstSleepMs: null, latestEndMs: null, endDateStr: null,
-  }
-
-  let hasSleepData = false
+): SleepResult[] {
+  // ── Group samples by wake-up date ─────────────────────────────────────────
+  const byDate: Record<string, Record<string, unknown>[]> = {}
 
   for (const point of dataPoints) {
-    const p         = point as Record<string, unknown>
-    const stageKey  = typeof p.value === 'string' ? SLEEP_STAGE_MAP[p.value] : undefined
-    if (!stageKey) continue
+    const p = point as Record<string, unknown>
+    const dateStr = typeof p.date === 'string' ? p.date.slice(0, 10) : null
+    if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) continue
+    if (!byDate[dateStr]) byDate[dateStr] = []
+    byDate[dateStr].push(p)
+  }
 
-    const qty = typeof p.qty === 'number' ? p.qty : null
-    if (qty == null || !isFinite(qty) || qty < 0) continue
+  const results: SleepResult[] = []
 
-    hasSleepData = true
-    acc[stageKey] += qty
+  for (const [date, samples] of Object.entries(byDate)) {
+    // ── Pick the main sleep episode (largest totalSleep) ───────────────────
+    if (samples.length > 1) {
+      console.log(`[hae/ingest] sleep_analysis: ${samples.length} samples for ${date} — picking largest totalSleep`)
+    }
 
-    const startMs  = parseHAETimestampMs(p.startDate ?? p.date)
-    const endMs    = parseHAETimestampMs(p.endDate)
+    const best = samples.reduce((prev, curr) => {
+      const pTotal = typeof prev.totalSleep === 'number' ? prev.totalSleep : 0
+      const cTotal = typeof curr.totalSleep === 'number' ? curr.totalSleep : 0
+      return cTotal > pTotal ? curr : prev
+    })
 
-    if (stageKey === 'inBed') {
-      if (startMs !== null && (acc.inBedStartMs === null || startMs < acc.inBedStartMs)) {
-        acc.inBedStartMs = startMs
-      }
-      // Track the endDate string of the inBed sample for date assignment
-      if (typeof p.endDate === 'string' && p.endDate.length >= 10) {
-        // Use the end-date of the latest inBed sample as the sleep record date
-        if (endMs !== null && (acc.latestEndMs === null || endMs > acc.latestEndMs)) {
-          acc.endDateStr = p.endDate
-        }
-      }
+    const totalSleepH = typeof best.totalSleep === 'number' && best.totalSleep > 0
+      ? best.totalSleep : null
+    if (totalSleepH == null) continue   // skip if no valid sleep duration
+
+    // ── Stage durations (hours → minutes) ──────────────────────────────────
+    const asleepMinutes = Math.round(totalSleepH * 60)
+
+    const hrToMin = (field: string): number | null => {
+      const v = best[field]
+      return typeof v === 'number' && v > 0 ? Math.round(v * 60) : null
+    }
+    const coreMinutes  = hrToMin('core')
+    const remMinutes   = hrToMin('rem')
+    const deepMinutes  = hrToMin('deep')
+    const awakeMinutes = hrToMin('awake')
+
+    // ── in_bed_minutes ──────────────────────────────────────────────────────
+    // inBed field (hours) > 0 → use it directly.
+    // Otherwise derive from inBedEnd − sleepStart timestamps.
+    const inBedH = typeof best.inBed === 'number' ? best.inBed : null
+    let inBedMinutes: number | null = null
+
+    if (inBedH != null && inBedH > 0) {
+      inBedMinutes = Math.round(inBedH * 60)
     } else {
-      // Track earliest sleep-stage onset for fall_asleep_minutes
-      if (startMs !== null && (acc.firstSleepMs === null || startMs < acc.firstSleepMs)) {
-        acc.firstSleepMs = startMs
+      const inBedEndMs   = parseHAETimestampMs(best.inBedEnd)
+      const sleepStartMs = parseHAETimestampMs(best.sleepStart)
+      if (inBedEndMs != null && sleepStartMs != null && inBedEndMs > sleepStartMs) {
+        inBedMinutes = Math.round((inBedEndMs - sleepStartMs) / 60_000)
       }
     }
 
-    // Track overall latest end across all samples
-    if (endMs !== null && (acc.latestEndMs === null || endMs > acc.latestEndMs)) {
-      acc.latestEndMs = endMs
+    // ── efficiency_pct ──────────────────────────────────────────────────────
+    const efficiencyPct = inBedMinutes != null && inBedMinutes > 0
+      ? Math.min(100, Math.round((asleepMinutes / inBedMinutes) * 100))
+      : null
+
+    // ── fall_asleep_minutes ─────────────────────────────────────────────────
+    // Requires both inBedStart and sleepStart fields.
+    let fallAsleepMinutes: number | null = null
+    const inBedStartMs = parseHAETimestampMs(best.inBedStart)
+    const sleepStartMs = parseHAETimestampMs(best.sleepStart)
+    if (inBedStartMs != null && sleepStartMs != null && sleepStartMs >= inBedStartMs) {
+      fallAsleepMinutes = Math.max(0, Math.round((sleepStartMs - inBedStartMs) / 60_000))
     }
+
+    // ── Timestamps ─────────────────────────────────────────────────────────
+    const startTime = typeof best.sleepStart === 'string' ? best.sleepStart : null
+    const endTime   = typeof best.sleepEnd   === 'string' ? best.sleepEnd
+                    : typeof best.inBedEnd   === 'string' ? best.inBedEnd
+                    : null
+
+    // ── sleep_records row ───────────────────────────────────────────────────
+    const record: Record<string, unknown> = {
+      user_id:             userId,
+      date,
+      source:              'apple_health',
+      start_time:          startTime,
+      end_time:            endTime,
+      in_bed_minutes:      inBedMinutes,
+      asleep_minutes:      asleepMinutes,
+      core_minutes:        coreMinutes,
+      rem_minutes:         remMinutes,
+      deep_minutes:        deepMinutes,
+      awake_minutes:       awakeMinutes,
+      efficiency_pct:      efficiencyPct,
+      fall_asleep_minutes: fallAsleepMinutes,
+      wake_count:          null,
+      updated_at:          new Date().toISOString(),
+    }
+
+    // ── health_metrics backward-compat row ──────────────────────────────────
+    // source='apple_health_sleep' keeps HRV/RHR fields safe on conflict.
+    const hmRow: Record<string, unknown> = {
+      user_id:            userId,
+      date,
+      source:             'apple_health_sleep',
+      sleep_minutes:      asleepMinutes,
+      deep_sleep_minutes: deepMinutes,
+      rem_sleep_minutes:  remMinutes,
+    }
+
+    results.push({ date, record, hmRow })
   }
 
-  if (!hasSleepData) return null
-
-  // ── Determine the sleep record date (wake-up date = local end date) ─────────
-  // Prefer the endDate of the inBed sample; fall back to date of latest end.
-  const sleepDate = acc.endDateStr
-    ? acc.endDateStr.slice(0, 10)
-    : null
-
-  if (!sleepDate) return null
-
-  // ── Compute derived fields ────────────────────────────────────────────────
-  const asleepMinutes = Math.round(acc.core + acc.rem + acc.deep + acc.unspecified)
-  const inBedMinutes  = Math.round(acc.inBed)
-
-  const efficiencyPct =
-    inBedMinutes > 0
-      ? Math.round((asleepMinutes / inBedMinutes) * 100)
-      : null
-
-  const fallAsleepMinutes =
-    acc.inBedStartMs !== null && acc.firstSleepMs !== null
-      ? Math.max(0, Math.round((acc.firstSleepMs - acc.inBedStartMs) / 60_000))
-      : null
-
-  // ── Build sleep_records row ───────────────────────────────────────────────
-  const record: Record<string, unknown> = {
-    user_id:             userId,
-    date:                sleepDate,
-    source:              'apple_health',
-    in_bed_minutes:      inBedMinutes || null,
-    asleep_minutes:      asleepMinutes || null,
-    core_minutes:        Math.round(acc.core)  || null,
-    rem_minutes:         Math.round(acc.rem)   || null,
-    deep_minutes:        Math.round(acc.deep)  || null,
-    awake_minutes:       Math.round(acc.awake) || null,
-    efficiency_pct:      efficiencyPct,
-    fall_asleep_minutes: fallAsleepMinutes,
-    updated_at:          new Date().toISOString(),
-  }
-
-  // ── Build health_metrics backward-compat row ──────────────────────────────
-  // Uses source='apple_health_sleep' (separate from 'apple_health' HRV rows)
-  // to avoid overwriting HRV/RHR fields on conflict.
-  const hmRow: Record<string, unknown> = {
-    user_id:             userId,
-    date:                sleepDate,
-    source:              'apple_health_sleep',
-    sleep_minutes:       asleepMinutes || null,
-    deep_sleep_minutes:  Math.round(acc.deep) || null,
-    rem_sleep_minutes:   Math.round(acc.rem)  || null,
-  }
-
-  return { date: sleepDate, record, hmRow }
+  return results
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -317,12 +317,6 @@ export async function POST(request: Request) {
     }
   }
 
-  // ── TEMP: log first sleep_analysis sample for payload format inspection ───
-  if (sleepAnalysisPoints.length > 0) {
-    console.log('[hae/ingest] sleep_analysis first sample:', JSON.stringify(sleepAnalysisPoints[0], null, 2))
-    console.log('[hae/ingest] sleep_analysis total samples:', sleepAnalysisPoints.length)
-  }
-
   // ── 7. Accumulate health metric samples by (date, field) ──────────────────
   const byDate: Record<string, Partial<Record<keyof RowFields, number[]>>> = {}
   let totalSamplesRead = 0
@@ -374,12 +368,12 @@ export async function POST(request: Request) {
   })
 
   // ── 9. Process sleep_analysis ─────────────────────────────────────────────
-  const sleepResult = sleepAnalysisPoints.length > 0
+  const sleepResults: SleepResult[] = sleepAnalysisPoints.length > 0
     ? processSleepAnalysis(sleepAnalysisPoints, userId)
-    : null
+    : []
 
   // ── 10. Guard: at least something recognised ──────────────────────────────
-  if (datesFound.length === 0 && sleepResult === null) {
+  if (datesFound.length === 0 && sleepResults.length === 0) {
     return NextResponse.json(
       { ok: false, error: 'No recognized metric or sleep data found in payload.' },
       { status: 422 }
@@ -404,25 +398,25 @@ export async function POST(request: Request) {
   }
 
   // ── 12. Upsert sleep_records + sleep health_metrics ───────────────────────
-  let sleepDate: string | null = null
+  const sleepDates: string[] = []
 
-  if (sleepResult) {
-    sleepDate = sleepResult.date
-
+  for (const sr of sleepResults) {
     // 12a. sleep_records
     const { error: sleepErr } = await supabase
       .from('sleep_records')
-      .upsert(sleepResult.record, { onConflict: 'user_id,date,source' })
+      .upsert(sr.record, { onConflict: 'user_id,date,source' })
 
     if (sleepErr) {
       console.error('[hae/ingest] sleep_records upsert error:', sleepErr.message)
-      // Non-fatal — log and continue
+      // Non-fatal — continue with remaining nights
+    } else {
+      sleepDates.push(sr.date)
     }
 
     // 12b. health_metrics backward-compat (source='apple_health_sleep')
     const { error: sleepHmErr } = await supabase
       .from('health_metrics')
-      .upsert(sleepResult.hmRow, { onConflict: 'user_id,date,source' })
+      .upsert(sr.hmRow, { onConflict: 'user_id,date,source' })
 
     if (sleepHmErr) {
       console.error('[hae/ingest] sleep health_metrics upsert error:', sleepHmErr.message)
@@ -434,21 +428,24 @@ export async function POST(request: Request) {
     datesFound.some(d => byDate[d][col as keyof RowFields]?.length)
   )
 
-  if (sleepResult) {
-    if (sleepResult.hmRow.sleep_minutes != null)      metricsImported.push('sleep_minutes')
-    if (sleepResult.hmRow.deep_sleep_minutes != null) metricsImported.push('deep_sleep_minutes')
-    if (sleepResult.hmRow.rem_sleep_minutes != null)  metricsImported.push('rem_sleep_minutes')
+  if (sleepResults.length > 0) {
+    const anySleep = sleepResults.some(sr => sr.hmRow.sleep_minutes != null)
+    const anyDeep  = sleepResults.some(sr => sr.hmRow.deep_sleep_minutes != null)
+    const anyRem   = sleepResults.some(sr => sr.hmRow.rem_sleep_minutes != null)
+    if (anySleep) metricsImported.push('sleep_minutes')
+    if (anyDeep)  metricsImported.push('deep_sleep_minutes')
+    if (anyRem)   metricsImported.push('rem_sleep_minutes')
   }
 
   // ── 14. Write import log ──────────────────────────────────────────────────
-  const allDates = [...new Set([...datesFound, ...(sleepDate ? [sleepDate] : [])])].sort()
+  const allDates = [...new Set([...datesFound, ...sleepDates])].sort()
 
   await supabase.from('data_import_logs').insert({
     user_id: userId,
     source:  'health_auto_export',
     status:  'success',
     rows_read:     totalSamplesRead + sleepAnalysisPoints.length,
-    rows_imported: rowsToUpsert.length + (sleepResult ? 1 : 0),
+    rows_imported: rowsToUpsert.length + sleepDates.length,
     rows_skipped:  0,
     error_message: null,
     metadata: {
@@ -456,7 +453,7 @@ export async function POST(request: Request) {
       metrics_detected:  metricsImported,
       metrics_ignored:   metricsIgnored.length > 0 ? metricsIgnored : undefined,
       ingest_timestamp:  new Date().toISOString(),
-      row_count:         rowsToUpsert.length + (sleepResult ? 1 : 0),
+      row_count:         rowsToUpsert.length + sleepDates.length,
     },
   })
 
@@ -466,8 +463,8 @@ export async function POST(request: Request) {
     source:         'apple_health',
     datesImported:  allDates,
     metricsImported,
-    rowsImported:   rowsToUpsert.length + (sleepResult ? 1 : 0),
-    ...(sleepResult        ? { sleepDate }      : {}),
+    rowsImported:   rowsToUpsert.length + sleepDates.length,
+    ...(sleepDates.length > 0 ? { sleepDates } : {}),
     ...(metricsIgnored.length > 0 ? { metricsIgnored } : {}),
   })
 }
