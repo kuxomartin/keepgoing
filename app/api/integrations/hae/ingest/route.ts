@@ -29,6 +29,23 @@ const METRIC_MAP: Record<string, keyof RowFields> = {
   respiratory_rate:       'respiratory_rate',
 }
 
+// ── Weight / body-composition metrics — explicitly ignored ────────────────────
+//
+// Weight is manually logged in KeepGoing. Historical imported weight is kept,
+// but new HAE weight is ignored. Manual KeepGoing weight is the only active
+// source for new weight data going forward.
+//
+const WEIGHT_IGNORE_KEYS = new Set([
+  'weight_body_mass',
+  'body_mass',
+  'body_fat_percentage',
+  'body_fat_percent',
+  'weight',
+  'lean_body_mass',
+  'body_mass_index',
+  'bmi',
+])
+
 interface RowFields {
   hrv_ms:              number | null
   resting_hr:          number | null
@@ -280,15 +297,21 @@ export async function POST(request: Request) {
     )
   }
 
-  // ── 6. Partition: health metrics vs sleep_analysis ─────────────────────────
+  // ── 6. Partition: health metrics vs sleep_analysis vs ignored weight ─────────
   const healthMetricGroups: unknown[] = []
   const sleepAnalysisPoints: unknown[] = []
+  const metricsIgnored: string[] = []   // weight/body-comp fields present but skipped
 
   for (const metricGroup of metricsRaw) {
-    const mg = metricGroup as Record<string, unknown>
-    if (mg.name === 'sleep_analysis') {
+    const mg   = metricGroup as Record<string, unknown>
+    const name = typeof mg.name === 'string' ? mg.name : ''
+
+    if (name === 'sleep_analysis') {
       const dp = mg.data
       if (Array.isArray(dp)) sleepAnalysisPoints.push(...dp)
+    } else if (WEIGHT_IGNORE_KEYS.has(name)) {
+      // Weight / body-composition — ignored per rule. Historical DB rows kept.
+      if (!metricsIgnored.includes(name)) metricsIgnored.push(name)
     } else {
       healthMetricGroups.push(mg)
     }
@@ -423,10 +446,11 @@ export async function POST(request: Request) {
     rows_skipped:  0,
     error_message: null,
     metadata: {
-      date_range:       allDates,
-      metrics_detected: metricsImported,
-      ingest_timestamp: new Date().toISOString(),
-      row_count:        rowsToUpsert.length + (sleepResult ? 1 : 0),
+      date_range:        allDates,
+      metrics_detected:  metricsImported,
+      metrics_ignored:   metricsIgnored.length > 0 ? metricsIgnored : undefined,
+      ingest_timestamp:  new Date().toISOString(),
+      row_count:         rowsToUpsert.length + (sleepResult ? 1 : 0),
     },
   })
 
@@ -437,6 +461,7 @@ export async function POST(request: Request) {
     datesImported:  allDates,
     metricsImported,
     rowsImported:   rowsToUpsert.length + (sleepResult ? 1 : 0),
-    ...(sleepResult ? { sleepDate } : {}),
+    ...(sleepResult        ? { sleepDate }      : {}),
+    ...(metricsIgnored.length > 0 ? { metricsIgnored } : {}),
   })
 }

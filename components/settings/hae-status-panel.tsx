@@ -16,6 +16,7 @@ interface LogRow {
   metadata: {
     date_range?: string[]
     metrics_detected?: string[]
+    metrics_ignored?: string[]
     ingest_timestamp?: string
   } | null
 }
@@ -33,6 +34,17 @@ const METRIC_LABELS: Record<string, string> = {
   rem_sleep_minutes:   'REM',
 }
 
+const IGNORED_METRIC_LABELS: Record<string, string> = {
+  weight_body_mass:    'Weight',
+  body_mass:           'Body mass',
+  body_fat_percentage: 'Body fat %',
+  body_fat_percent:    'Body fat %',
+  weight:              'Weight',
+  lean_body_mass:      'Lean body mass',
+  body_mass_index:     'BMI',
+  bmi:                 'BMI',
+}
+
 export async function HaeStatusPanel() {
   const supabase = await createClient()
 
@@ -46,11 +58,12 @@ export async function HaeStatusPanel() {
 
   const log = data as LogRow | null
 
-  const lastReceivedAt = log?.metadata?.ingest_timestamp ?? log?.created_at ?? null
-  const importedDates  = log?.metadata?.date_range ?? []
+  const lastReceivedAt  = log?.metadata?.ingest_timestamp ?? log?.created_at ?? null
+  const importedDates   = log?.metadata?.date_range ?? []
   const metricsDetected = log?.metadata?.metrics_detected ?? []
-  const latestDate     = importedDates.length > 0 ? importedDates[importedDates.length - 1] : null
-  const isError        = log?.status === 'error'
+  const metricsIgnored  = log?.metadata?.metrics_ignored ?? []
+  const latestDate      = importedDates.length > 0 ? importedDates[importedDates.length - 1] : null
+  const isError         = log?.status === 'error'
 
   // Ingest endpoint URL (shown but token not shown)
   const ingestPath = '/api/integrations/hae/ingest'
@@ -117,6 +130,27 @@ export async function HaeStatusPanel() {
                   </span>
                 ))}
               </div>
+            </div>
+          )}
+
+          {metricsIgnored.length > 0 && (
+            <div className="sm:col-span-2">
+              <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.1em] mb-1.5">
+                Ignored (manual entry only)
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {metricsIgnored.map(m => (
+                  <span
+                    key={m}
+                    className="px-2 py-0.5 border border-white/[0.04] text-[11px] text-white/20 font-mono line-through"
+                  >
+                    {IGNORED_METRIC_LABELS[m] ?? m}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[10px] text-white/20 mt-1.5">
+                Weight is manually logged in KeepGoing. Historical records are kept — new Apple Health weight is not imported.
+              </p>
             </div>
           )}
 
