@@ -24,8 +24,11 @@ import {
 } from '@/lib/calculations/recovery-intelligence'
 import { mockHealthMetrics } from '@/lib/mock-data/demo-data'
 import { computeRecoveryKillers } from '@/lib/insights/recovery-killers'
+import { computeRecoveryDebug } from '@/lib/calculations/recovery-debug'
 import type { HealthMetrics } from '@/types/database'
 import { cn } from '@/lib/utils'
+
+const IS_DEV = process.env.NODE_ENV === 'development'
 
 /**
  * Merges all health_metrics rows for the same date into one record.
@@ -306,6 +309,37 @@ export default async function RecoveryPage() {
     avgSleepH: avg14dSleep,
     avgRhr: avg14dRhr,
   })
+
+  // ── Debug breakdown (dev only) ────────────────────────────────────────────
+  const weeklyLoadMinsRecovery = (() => {
+    const d7 = format(subDays(startOfDay(new Date()), 6), 'yyyy-MM-dd')
+    let total = 0
+    for (const a of activitiesAll30d ?? []) {
+      const row = a as { start_time: string; duration_minutes: number | null }
+      if (row.start_time.slice(0, 10) >= d7) total += row.duration_minutes ?? 0
+    }
+    return total
+  })()
+
+  const hardSessionDatesRecovery = (activitiesAll30d ?? [])
+    .filter((a) => ((a as { duration_minutes: number | null }).duration_minutes ?? 0) >= 45)
+    .map((a) => (a as { start_time: string }).start_time.slice(0, 10))
+    .sort()
+    .reverse()
+
+  const daysSinceHardRecovery = hardSessionDatesRecovery.length > 0
+    ? Math.round((new Date().getTime() - new Date(hardSessionDatesRecovery[0] + 'T12:00:00').getTime()) / 86400000)
+    : null
+
+  const debugBreakdown = IS_DEV
+    ? computeRecoveryDebug(
+        todayMetrics,
+        avg14dHrv,
+        weeklyLoadMinsRecovery,
+        daysSinceHardRecovery,
+        isCurrentDay,
+      )
+    : null
 
   return (
     <div className="flex flex-col bg-[#151A20]">
@@ -806,6 +840,145 @@ export default async function RecoveryPage() {
           </div>
         </Container>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          DEBUG — developer-only score breakdown (NODE_ENV=development)
+      ══════════════════════════════════════════════════════════════════ */}
+      {IS_DEV && debugBreakdown && (
+        <div className="border-t-2 border-dashed border-yellow-500/30 pt-10 pb-12 bg-[#0D1117]">
+          <Container>
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-8">
+              <span className="px-2 py-0.5 bg-yellow-500/15 border border-yellow-500/30 text-yellow-400 text-[10px] font-bold uppercase tracking-widest">
+                DEV
+              </span>
+              <p className="text-[10px] font-bold text-yellow-400/60 uppercase tracking-[0.18em]">
+                Recovery Score Debug
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+              {/* Left: scoring steps */}
+              <div className="space-y-0 border border-white/[0.08] divide-y divide-white/[0.06]">
+
+                {/* Base */}
+                <div className="px-5 py-3 flex items-center justify-between">
+                  <span className="font-mono text-xs text-white/25">base score</span>
+                  <span className="font-mono text-sm font-bold text-white tabular-nums">100</span>
+                </div>
+
+                {/* Per-signal rows */}
+                {debugBreakdown.steps.map(step => (
+                  <div key={step.label} className="px-5 py-4">
+                    {/* Signal label + deduction chip */}
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold text-white/40 uppercase tracking-[0.12em]">
+                        {step.label}
+                      </span>
+                      <span className={cn(
+                        'font-mono text-xs font-bold tabular-nums px-1.5 py-0.5',
+                        step.deduction === 0
+                          ? 'text-[#16A34A] bg-[#16A34A]/10'
+                          : 'text-[#E5173F] bg-[#E5173F]/10'
+                      )}>
+                        {step.deduction === 0 ? '+0' : `−${step.deduction}`}
+                      </span>
+                    </div>
+
+                    {/* Values */}
+                    <div className="flex items-baseline gap-2 mb-1">
+                      <span className="font-mono text-lg font-bold text-white tabular-nums leading-none">
+                        {step.rawValue}
+                      </span>
+                    </div>
+                    <p className="font-mono text-[10px] text-white/25 mb-1">{step.target}</p>
+                    <p className="font-mono text-[10px] text-yellow-400/60">{step.rule}</p>
+
+                    {/* Running score */}
+                    <div className="mt-2 pt-2 border-t border-white/[0.04] flex justify-between items-center">
+                      <span className="font-mono text-[10px] text-white/15">score after this step</span>
+                      <span className="font-mono text-xs text-white/50 tabular-nums">{step.scoreAfter}</span>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Final score */}
+                <div className="px-5 py-4 bg-white/[0.02] flex items-center justify-between">
+                  <span className="font-mono text-xs font-bold text-white/50 uppercase tracking-[0.1em]">Final Score</span>
+                  <span className="font-mono text-2xl font-bold text-white tabular-nums">
+                    {debugBreakdown.finalScore}
+                  </span>
+                </div>
+
+                {/* Deductions summary */}
+                <div className="px-5 py-3 flex items-center justify-between">
+                  <span className="font-mono text-[10px] text-white/20">total deductions</span>
+                  <span className="font-mono text-xs text-[#E5173F]/70 tabular-nums">
+                    {debugBreakdown.totalDeductions > 0 ? `−${debugBreakdown.totalDeductions}` : '0'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Right: status + context */}
+              <div className="space-y-6">
+
+                {/* Status rule */}
+                <div className="border border-white/[0.08] px-5 py-5">
+                  <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-3">Hero Status</p>
+                  <p className={cn(
+                    'font-display font-bold text-2xl leading-tight mb-2',
+                    debugBreakdown.status === 'green'  ? 'text-[#16A34A]'
+                    : debugBreakdown.status === 'yellow' ? 'text-[#D97706]'
+                    : 'text-[#E5173F]'
+                  )}>
+                    {debugBreakdown.heroLabel}
+                  </p>
+                  <p className="font-mono text-xs text-yellow-400/60">{debugBreakdown.statusRule}</p>
+                </div>
+
+                {/* HRV vs baseline */}
+                <div className="border border-white/[0.08] px-5 py-5">
+                  <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-3">HRV vs Baseline</p>
+                  <p className="font-mono text-xs text-white/50 leading-relaxed">{debugBreakdown.hrvRatioDisplay}</p>
+                  {debugBreakdown.hrvRatio != null && (
+                    <p className="font-mono text-xs text-yellow-400/60 mt-1">
+                      ratio: {debugBreakdown.hrvRatio.toFixed(3)}
+                      {' · '}{debugBreakdown.hrvRatio >= 1.10 ? 'PUSH territory'
+                        : debugBreakdown.hrvRatio >= 0.95 ? 'TRAIN territory'
+                        : debugBreakdown.hrvRatio >= 0.82 ? 'EASY territory'
+                        : 'RECOVER territory'}
+                    </p>
+                  )}
+                  <p className="font-mono text-[10px] text-white/15 mt-1">
+                    (HRV ratio used by readiness engine, not score formula)
+                  </p>
+                </div>
+
+                {/* Training load context */}
+                <div className="border border-white/[0.08] px-5 py-5">
+                  <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-3">Training Load Context</p>
+                  <p className="font-mono text-xs text-white/50 leading-relaxed">{debugBreakdown.loadContext}</p>
+                  {debugBreakdown.daysSinceHard != null && (
+                    <p className="font-mono text-xs text-white/30 mt-1">
+                      last hard session: {debugBreakdown.daysSinceHard}d ago
+                    </p>
+                  )}
+                  <p className="font-mono text-[10px] text-white/15 mt-1">
+                    (training load not in score formula — affects readiness recommendation only)
+                  </p>
+                </div>
+
+                {/* Data source note */}
+                <p className="font-mono text-[10px] text-white/15 leading-relaxed">
+                  Data from: {isCurrentDay ? 'today' : dataDateLabel ?? 'most recent available'}.
+                  {isUsingMock ? ' Using mock data.' : ' Real Supabase data.'}
+                </p>
+              </div>
+            </div>
+          </Container>
+        </div>
+      )}
 
     </div>
   )
