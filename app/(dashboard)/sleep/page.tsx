@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { format, subDays, startOfDay } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { trendColor } from '@/lib/spark-utils'
+import { SleepTimeRange } from '@/components/sleep/sleep-time-range'
 import { SleepChart } from '@/components/charts/sleep-chart'
 import { SleepArchitectureChart } from '@/components/charts/sleep-architecture-chart'
 import { SleepEfficiencyChart } from '@/components/charts/sleep-efficiency-chart'
@@ -259,6 +260,15 @@ export default async function SleepPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Sleep window — local time (client-formatted to avoid UTC display) */}
+              {latest?.start_time && latest?.end_time &&
+               new Date(latest.start_time).getFullYear() >= 2000 &&
+               new Date(latest.end_time).getFullYear() >= 2000 && (
+                <div className="mt-5">
+                  <SleepTimeRange startIso={latest.start_time} endIso={latest.end_time} />
                 </div>
               )}
             </>
