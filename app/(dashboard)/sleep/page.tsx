@@ -75,7 +75,25 @@ export default async function SleepPage() {
   const { data: sleepRaw } = await supabase
     .from('sleep_records').select('*').gte('date', d30ago).lte('date', today).order('date', { ascending: true })
 
-  const sleepRecords = (sleepRaw ?? []) as SleepRecord[]
+  // ── Source priority deduplication ─────────────────────────────────────────
+  // For each date keep only the highest-priority source so apple_health always
+  // wins over google_sheets_sleep for the same night.
+  const SLEEP_SOURCE_PRIORITY = ['apple_health', 'google_sheets_sleep', 'google_sheets', 'mock']
+  const sleepRecords = (() => {
+    const all = (sleepRaw ?? []) as SleepRecord[]
+    const byDate = new Map<string, SleepRecord>()
+    for (const r of all) {
+      const existing = byDate.get(r.date)
+      if (!existing) { byDate.set(r.date, r); continue }
+      const newPri = SLEEP_SOURCE_PRIORITY.indexOf(r.source)
+      const curPri = SLEEP_SOURCE_PRIORITY.indexOf(existing.source)
+      const newRank = newPri === -1 ? 999 : newPri
+      const curRank = curPri === -1 ? 999 : curPri
+      if (newRank < curRank) byDate.set(r.date, r)
+    }
+    return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+  })()
+
   const latest       = [...sleepRecords].reverse().find(r => r.asleep_minutes != null) ?? null
   const latestDate   = latest?.date ?? null
   const records14    = sleepRecords.filter(r => r.date >= d14ago)
