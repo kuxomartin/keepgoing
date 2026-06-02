@@ -275,39 +275,51 @@ export default async function SleepPage() {
                   new Date(latest.start_time).getFullYear() >= 2000 &&
                   new Date(latest.end_time).getFullYear() >= 2000
 
-                // Humanise labels for inline display
+                // Label overrides for hero display
                 function humanLabel(label: string): string {
-                  if (label === 'Wake count')    return 'wake events'
-                  if (label === 'Avg sleep HRV') return 'sleep HRV'
-                  return label.toLowerCase()
+                  if (label === 'Wake count')    return 'Wake Events'
+                  if (label === 'Avg sleep HRV') return 'Morning HRV'
+                  if (label === 'Efficiency')    return 'Efficiency'
+                  return label
                 }
 
                 return (
                   <div>
-                    {/* PRIMARY — duration */}
-                    <div
-                      className="font-bold text-white font-mono tabular-nums leading-none"
-                      style={{ fontSize: 'clamp(3.75rem, 8vw, 6rem)', letterSpacing: '-0.025em' }}
-                    >
-                      {first.value}
+                    {/* Metrics row — balanced visual weight across all stats */}
+                    <div className="flex flex-wrap gap-x-10 gap-y-6">
+                      {/* Duration — anchor metric, one step larger */}
+                      <div>
+                        <div
+                          className="font-mono font-bold text-white tabular-nums leading-none"
+                          style={{ fontSize: '2.75rem', letterSpacing: '-0.025em' }}
+                        >
+                          {first.value}
+                        </div>
+                        <div className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.14em] mt-2.5">
+                          {first.label}
+                        </div>
+                      </div>
+
+                      {/* Secondary metrics — similar weight to duration */}
+                      {rest.map(fact => (
+                        <div key={fact.label}>
+                          <div
+                            className="font-mono font-bold text-white/80 tabular-nums leading-none"
+                            style={{ fontSize: '2.25rem', letterSpacing: '-0.02em' }}
+                          >
+                            {fact.value}
+                          </div>
+                          <div className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.14em] mt-2.5">
+                            {humanLabel(fact.label)}
+                          </div>
+                        </div>
+                      ))}
                     </div>
 
-                    {/* SECONDARY — time window (client-rendered local timezone) */}
+                    {/* Sleep window — beneath the metrics block */}
                     {validTimes && (
-                      <div className="mt-2">
+                      <div className="mt-5">
                         <SleepTimeRange startIso={latest!.start_time!} endIso={latest!.end_time!} />
-                      </div>
-                    )}
-
-                    {/* TERTIARY — secondary facts inline */}
-                    {rest.length > 0 && (
-                      <div className="flex flex-wrap gap-x-7 gap-y-2 mt-6">
-                        {rest.map(fact => (
-                          <span key={fact.label} className="text-sm text-white/40">
-                            <span className="font-mono font-semibold text-white/65 mr-1">{fact.value}</span>
-                            {humanLabel(fact.label)}
-                          </span>
-                        ))}
                       </div>
                     )}
                   </div>
