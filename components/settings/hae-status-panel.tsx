@@ -48,13 +48,21 @@ const IGNORED_METRIC_LABELS: Record<string, string> = {
 export async function HaeStatusPanel() {
   const supabase = await createClient()
 
-  const { data } = await supabase
-    .from('data_import_logs')
-    .select('status, rows_imported, created_at, error_message, metadata')
-    .eq('source', 'health_auto_export')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
+  const [{ data }, { data: workoutData }] = await Promise.all([
+    supabase
+      .from('data_import_logs')
+      .select('status, rows_imported, created_at, error_message, metadata')
+      .eq('source', 'health_auto_export')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single(),
+    supabase
+      .from('activities')
+      .select('start_time')
+      .eq('source', 'apple_health_workout')
+      .order('start_time', { ascending: false })
+      .limit(1),
+  ])
 
   const log = data as LogRow | null
 
@@ -64,6 +72,9 @@ export async function HaeStatusPanel() {
   const metricsIgnored  = log?.metadata?.metrics_ignored ?? []
   const latestDate      = importedDates.length > 0 ? importedDates[importedDates.length - 1] : null
   const isError         = log?.status === 'error'
+
+  // Workout stats (queried live from activities table)
+  const latestWorkout   = (workoutData ?? [])[0] as { start_time: string } | undefined
 
   // Ingest endpoint URL (shown but token not shown)
   const ingestPath = '/api/integrations/hae/ingest'
@@ -150,6 +161,17 @@ export async function HaeStatusPanel() {
               </div>
               <p className="text-[10px] text-white/20 mt-1.5">
                 Weight is manually logged in KeepGoing. Historical records are kept — new Apple Health weight is not imported.
+              </p>
+            </div>
+          )}
+
+          {latestWorkout && (
+            <div className="sm:col-span-2">
+              <p className="text-[10px] font-bold text-white/20 uppercase tracking-[0.1em] mb-1.5">
+                Workouts imported
+              </p>
+              <p className="font-mono text-sm text-white/60">
+                Latest: {format(parseISO(latestWorkout.start_time), 'EEE d MMM yyyy · HH:mm')}
               </p>
             </div>
           )}

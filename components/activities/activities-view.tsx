@@ -14,6 +14,10 @@ import { cn } from '@/lib/utils'
 // ── Training load ─────────────────────────────────────────────────────────────
 const SPORT_HR: Record<string, number> = {
   walk: 95, ride: 130, run: 150, badminton: 130, hike: 110, golf: 80, gym: 120,
+  walking: 95, cycling: 130, running: 150, hiking: 110,
+  strength: 120, yoga: 85, mobility: 80, swimming: 140,
+  hiit: 155, cross_training: 130, pilates: 90, boxing: 145,
+  rowing: 140, elliptical: 125, stair_climbing: 135,
 }
 
 function calcLoad(a: Activity): number {
@@ -26,13 +30,31 @@ function calcLoad(a: Activity): number {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const ACTIVITY_COLOR: Record<string, string> = {
+  // Legacy types (GS-imported)
   ride: '#FF7A00', run: '#E5173F', golf: '#D4B483',
   walk: '#888888', hike: '#FFB000', gym: '#E5173F',
   badminton: '#FFB000', other: '#888888',
+  // HAE / Apple Health types
+  cycling: '#FF7A00', running: '#E5173F', walking: '#888888',
+  hiking: '#FFB000', strength: '#9B59B6', yoga: '#16A34A',
+  mobility: '#16A34A', swimming: '#0EA5E9', hiit: '#E5173F',
+  cross_training: '#FF7A00', pilates: '#EC4899', boxing: '#E5173F',
+  martial_arts: '#E5173F', rowing: '#0EA5E9', soccer: '#16A34A',
+  tennis: '#FFB000', basketball: '#FF7A00', elliptical: '#888888',
+  stair_climbing: '#9B59B6',
 }
 const TYPE_LABELS: Record<string, string> = {
+  // Legacy
   ride: 'Ride', run: 'Run', badminton: 'Badminton', golf: 'Golf',
   hike: 'Hike', gym: 'Gym', walk: 'Walk', other: 'Other',
+  // HAE types
+  cycling: 'Ride', running: 'Run', walking: 'Walk', hiking: 'Hike',
+  strength: 'Strength', yoga: 'Yoga', mobility: 'Mobility',
+  swimming: 'Swim', hiit: 'HIIT', cross_training: 'Cross Training',
+  pilates: 'Pilates', boxing: 'Boxing', martial_arts: 'Martial Arts',
+  rowing: 'Row', soccer: 'Soccer', tennis: 'Tennis',
+  basketball: 'Basketball', elliptical: 'Elliptical',
+  stair_climbing: 'Stair Climb',
 }
 
 type Range = '2w' | '1m' | '1y' | 'prev1y'
@@ -355,9 +377,16 @@ export function ActivitiesView({
                       <p className="text-[10px] font-bold uppercase tracking-[0.12em] mb-1.5" style={{ color }}>
                         {typeLabel}
                       </p>
-                      <p className="text-base font-bold text-white leading-snug mb-1 group-hover:text-white/90">
-                        {activity.title}
-                      </p>
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <p className="text-base font-bold text-white leading-snug group-hover:text-white/90">
+                          {activity.title}
+                        </p>
+                        {activity.source === 'apple_health_workout' && (
+                          <span className="flex-shrink-0 text-[9px] font-bold uppercase tracking-[0.1em] text-white/20 border border-white/[0.08] px-1.5 py-0.5 mt-0.5">
+                            Apple Health
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-white/30 mb-4">{date}</p>
 
                       <div className="flex flex-wrap gap-x-5 gap-y-1.5">

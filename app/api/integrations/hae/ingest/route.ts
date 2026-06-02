@@ -57,6 +57,42 @@ interface RowFields {
 }
 
 
+// ── HKWorkoutActivityType → activities.activity_type ─────────────────────────
+
+const WORKOUT_TYPE_MAP: Record<string, string> = {
+  // Full HK names
+  HKWorkoutActivityTypeWalking:                       'walking',
+  HKWorkoutActivityTypeRunning:                       'running',
+  HKWorkoutActivityTypeCycling:                       'cycling',
+  HKWorkoutActivityTypeHiking:                        'hiking',
+  HKWorkoutActivityTypeGolf:                          'golf',
+  HKWorkoutActivityTypeTraditionalStrengthTraining:   'strength',
+  HKWorkoutActivityTypeFunctionalStrengthTraining:    'strength',
+  HKWorkoutActivityTypeCoreTraining:                  'strength',
+  HKWorkoutActivityTypeYoga:                          'yoga',
+  HKWorkoutActivityTypeMobility:                      'mobility',
+  HKWorkoutActivityTypeFlexibility:                   'mobility',
+  HKWorkoutActivityTypeBadminton:                     'badminton',
+  HKWorkoutActivityTypeSwimming:                      'swimming',
+  HKWorkoutActivityTypeElliptical:                    'elliptical',
+  HKWorkoutActivityTypeStairClimbing:                 'stair_climbing',
+  HKWorkoutActivityTypeHighIntensityIntervalTraining: 'hiit',
+  HKWorkoutActivityTypeCrossTraining:                 'cross_training',
+  HKWorkoutActivityTypePilates:                       'pilates',
+  HKWorkoutActivityTypeBoxing:                        'boxing',
+  HKWorkoutActivityTypeMartialArts:                   'martial_arts',
+  HKWorkoutActivityTypeRowing:                        'rowing',
+  HKWorkoutActivityTypeSoccer:                        'soccer',
+  HKWorkoutActivityTypeTennis:                        'tennis',
+  HKWorkoutActivityTypeBasketball:                    'basketball',
+  HKWorkoutActivityTypeOther:                         'other',
+  // Short names (some HAE versions omit the HK prefix)
+  Walking: 'walking', Running: 'running', Cycling: 'cycling', Hiking: 'hiking',
+  Golf: 'golf', Yoga: 'yoga', Mobility: 'mobility', Badminton: 'badminton',
+  Swimming: 'swimming', Rowing: 'rowing', Other: 'other',
+  TraditionalStrengthTraining: 'strength', FunctionalStrengthTraining: 'strength',
+}
+
 // ── Aggregation helpers ───────────────────────────────────────────────────────
 
 function avgArr(arr: number[]): number {
@@ -98,6 +134,133 @@ function parseHAETimestampMs(raw: unknown): number | null {
     .replace(/([+-]\d{2})(\d{2})$/, '$1:$2')
   const ms = Date.parse(normalized)
   return isNaN(ms) ? null : ms
+}
+
+// ── Workout field helpers ─────────────────────────────────────────────────────
+
+/**
+ * Extract a numeric quantity from either a plain number or a HAE { qty, units } object.
+ */
+function getQty(v: unknown): number | null {
+  if (typeof v === 'number' && isFinite(v) && v >= 0) return v
+  if (v != null && typeof v === 'object' && 'qty' in v) {
+    const q = (v as { qty: unknown }).qty
+    if (typeof q === 'number' && isFinite(q) && q >= 0) return q
+  }
+  return null
+}
+
+/**
+ * Extract distance as km.
+ * HAE sends native HealthKit units (meters) as a plain number OR { qty, units }.
+ * When units are specified we use them; otherwise we assume meters.
+ */
+function getDistanceKm(v: unknown): number | null {
+  if (v == null) return null
+  const qty = getQty(v)
+  if (qty == null || qty <= 0) return null
+
+  if (typeof v === 'object' && v !== null && 'units' in v) {
+    const u = ((v as { units?: unknown }).units ?? '').toString().toLowerCase()
+    if (u === 'km')                           return Math.round(qty * 100) / 100
+    if (u === 'mi' || u === 'miles')          return Math.round(qty * 1.60934 * 100) / 100
+    // 'm' or unrecognised → assume meters
+    return Math.round((qty / 1000) * 100) / 100
+  }
+
+  // Bare number: if < 500, treat as km (unusual); otherwise meters.
+  // Most HealthKit distances are in meters so > 500 is very common.
+  return qty < 500
+    ? Math.round(qty * 100) / 100
+    : Math.round((qty / 1000) * 100) / 100
+}
+
+/**
+ * Normalise a HAE timestamp string to ISO 8601 for DB storage.
+ * "2026-06-01 10:00:00 +0200" → "2026-06-01T10:00:00+02:00"
+ */
+function normalizeHAETimestamp(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const s = raw
+    .replace(' ', 'T')
+    .replace(' ', '')
+    .replace(/([+-]\d{2})(\d{2})$/, '$1:$2')
+  return isNaN(Date.parse(s)) ? null : s
+}
+
+// ── Workout processor ─────────────────────────────────────────────────────────
+
+function processWorkouts(
+  workouts: unknown[],
+  userId: string
+): Record<string, unknown>[] {
+  const rows: Record<string, unknown>[] = []
+
+  for (const w of workouts) {
+    const workout = w as Record<string, unknown>
+
+    const uuid = typeof workout.uuid === 'string' && workout.uuid.trim()
+      ? workout.uuid.trim() : null
+    if (!uuid) continue   // no external_id → can't upsert idempotently
+
+    // Activity type
+    const rawType = typeof workout.workoutActivityType === 'string'
+      ? workout.workoutActivityType : ''
+    const activityType = WORKOUT_TYPE_MAP[rawType] ?? 'other'
+
+    // Start time (required for activities table)
+    const startTime = normalizeHAETimestamp(workout.start)
+    if (!startTime) continue
+
+    // Duration: HAE sends seconds
+    const durationSec = getQty(workout.duration)
+    const durationMin = durationSec != null && durationSec > 0
+      ? Math.round(durationSec / 60)
+      : (() => {
+          // Fallback: compute from end − start
+          const endMs   = parseHAETimestampMs(workout.end)
+          const startMs = parseHAETimestampMs(workout.start)
+          return (endMs != null && startMs != null && endMs > startMs)
+            ? Math.round((endMs - startMs) / 60_000)
+            : null
+        })()
+
+    // Title: prefer HAE name, fall back to type label
+    const typeLabel = activityType.charAt(0).toUpperCase() + activityType.slice(1).replace(/_/g, ' ')
+    const startDate  = startTime.slice(0, 10)
+    const title = (typeof workout.name === 'string' && workout.name.trim())
+      ? workout.name.trim()
+      : `${typeLabel} — ${startDate}`
+
+    // Optional fields
+    const distanceKm = getDistanceKm(workout.totalDistance ?? workout.distance)
+    const calories   = getQty(workout.activeEnergyBurned ?? workout.totalEnergyBurned)
+    const avgHr      = getQty(workout.avgHeartRate ?? workout.averageHeartRate)
+    const maxHr      = getQty(workout.maxHeartRate)
+
+    rows.push({
+      user_id:          userId,
+      source:           'apple_health_workout',
+      external_id:      uuid,
+      activity_type:    activityType,
+      title,
+      start_time:       startTime,
+      duration_minutes: durationMin,
+      distance_km:      distanceKm != null && distanceKm > 0 ? distanceKm : null,
+      calories:         calories   != null && calories   > 0 ? Math.round(calories) : null,
+      avg_hr:           avgHr      != null && avgHr      > 0 ? Math.round(avgHr)    : null,
+      max_hr:           maxHr      != null && maxHr      > 0 ? Math.round(maxHr)    : null,
+      elevation_gain_m: null,
+      avg_power:        null,
+      perceived_effort: null,
+      difficulty_note:  null,
+      weather_temp_c:   null,
+      weather_wind_kph: null,
+      source_payload:   null,
+    })
+  }
+
+  return rows
 }
 
 // ── Sleep analysis processor ──────────────────────────────────────────────────
@@ -297,10 +460,14 @@ export async function POST(request: Request) {
     )
   }
 
-  // ── 6. Partition: health metrics vs sleep_analysis vs ignored weight ─────────
+  // ── 6. Partition: health metrics vs sleep_analysis vs workouts vs ignored weight ──
   const healthMetricGroups: unknown[] = []
   const sleepAnalysisPoints: unknown[] = []
   const metricsIgnored: string[] = []   // weight/body-comp fields present but skipped
+
+  // Workouts come from body.data.workouts (separate from the metrics array)
+  const rawWorkouts = data?.workouts
+  const workoutsRaw: unknown[] = Array.isArray(rawWorkouts) ? rawWorkouts : []
 
   for (const metricGroup of metricsRaw) {
     const mg   = metricGroup as Record<string, unknown>
@@ -372,8 +539,13 @@ export async function POST(request: Request) {
     ? processSleepAnalysis(sleepAnalysisPoints, userId)
     : []
 
+  // ── 9b. Process workouts ──────────────────────────────────────────────────
+  const workoutRows = workoutsRaw.length > 0
+    ? processWorkouts(workoutsRaw, userId)
+    : []
+
   // ── 10. Guard: at least something recognised ──────────────────────────────
-  if (datesFound.length === 0 && sleepResults.length === 0) {
+  if (datesFound.length === 0 && sleepResults.length === 0 && workoutRows.length === 0) {
     return NextResponse.json(
       { ok: false, error: 'No recognized metric or sleep data found in payload.' },
       { status: 422 }
@@ -423,6 +595,21 @@ export async function POST(request: Request) {
     }
   }
 
+  // ── 12c. Upsert workouts ──────────────────────────────────────────────────
+  let workoutsImported = 0
+
+  if (workoutRows.length > 0) {
+    const { error: workoutErr, count } = await supabase
+      .from('activities')
+      .upsert(workoutRows, { onConflict: 'user_id,external_id,source', count: 'exact' })
+
+    if (workoutErr) {
+      console.error('[hae/ingest] workouts upsert error:', workoutErr.message)
+    } else {
+      workoutsImported = workoutRows.length
+    }
+  }
+
   // ── 13. Detect which columns were actually populated ──────────────────────
   const metricsImported: string[] = Object.values(METRIC_MAP).filter(col =>
     datesFound.some(d => byDate[d][col as keyof RowFields]?.length)
@@ -440,31 +627,35 @@ export async function POST(request: Request) {
   // ── 14. Write import log ──────────────────────────────────────────────────
   const allDates = [...new Set([...datesFound, ...sleepDates])].sort()
 
+  const totalRows = rowsToUpsert.length + sleepDates.length + workoutsImported
+
   await supabase.from('data_import_logs').insert({
     user_id: userId,
     source:  'health_auto_export',
     status:  'success',
-    rows_read:     totalSamplesRead + sleepAnalysisPoints.length,
-    rows_imported: rowsToUpsert.length + sleepDates.length,
+    rows_read:     totalSamplesRead + sleepAnalysisPoints.length + workoutsRaw.length,
+    rows_imported: totalRows,
     rows_skipped:  0,
     error_message: null,
     metadata: {
       date_range:        allDates,
       metrics_detected:  metricsImported,
       metrics_ignored:   metricsIgnored.length > 0 ? metricsIgnored : undefined,
+      workouts_imported: workoutsImported > 0 ? workoutsImported : undefined,
       ingest_timestamp:  new Date().toISOString(),
-      row_count:         rowsToUpsert.length + sleepDates.length,
+      row_count:         totalRows,
     },
   })
 
   // ── 15. Success response ──────────────────────────────────────────────────
   return NextResponse.json({
-    ok:             true,
-    source:         'apple_health',
-    datesImported:  allDates,
+    ok:              true,
+    source:          'apple_health',
+    datesImported:   allDates,
     metricsImported,
-    rowsImported:   rowsToUpsert.length + sleepDates.length,
-    ...(sleepDates.length > 0 ? { sleepDates } : {}),
-    ...(metricsIgnored.length > 0 ? { metricsIgnored } : {}),
+    rowsImported:    totalRows,
+    ...(sleepDates.length    > 0 ? { sleepDates }                                   : {}),
+    ...(workoutsImported     > 0 ? { workoutsImported, workoutsQueued: workoutRows.length } : {}),
+    ...(metricsIgnored.length > 0 ? { metricsIgnored }                               : {}),
   })
 }
