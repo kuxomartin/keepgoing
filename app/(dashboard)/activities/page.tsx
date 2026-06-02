@@ -35,6 +35,33 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
     rawActivities && rawActivities.length > 0 ? (rawActivities as Activity[]) : mockActivities
   const isUsingMock = !rawActivities || rawActivities.length === 0
 
+  // ── Source deduplication (UI-level, rows kept in DB) ─────────────────────
+  // strava_google_sheets is canonical. Hide apple_health_workout rows that
+  // represent the same physical workout:
+  //   • same calendar date
+  //   • duration within ±15 min
+  //   • distance within ±10% (when both > 0)
+  //
+  // Strava GS rows use midnight UTC as start_time (date-only import), so we
+  // compare on date string, not on timestamp proximity.
+  const stravaRows = allActivities.filter(a => a.source === 'strava_google_sheets')
+
+  const activities: Activity[] = allActivities.filter(a => {
+    if (a.source !== 'apple_health_workout') return true
+    const ahDate = a.start_time.slice(0, 10)
+    const ahDur  = a.duration_minutes ?? 0
+    const ahDist = a.distance_km     ?? 0
+    return !stravaRows.some(s => {
+      if (s.start_time.slice(0, 10) !== ahDate) return false
+      if (Math.abs(ahDur - (s.duration_minutes ?? 0)) > 15) return false
+      const sDist = s.distance_km ?? 0
+      if (ahDist > 0.5 && sDist > 0.5) {
+        if (Math.abs(ahDist - sDist) / Math.max(ahDist, sDist) > 0.10) return false
+      }
+      return true
+    })
+  })
+
   type HealthRow = { date: string; hrv_ms?: number | string | null; active_energy_kcal?: number | null }
 
   const hrvByDate: Record<string, number> = {}
@@ -46,19 +73,19 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
       activeEnergyByDate[m.date] = m.active_energy_kcal
   }
 
-  // Stats — always 90-day window
+  // Stats — always 90-day window (use deduplicated list)
   const ninetyDaysAgo = format(new Date(Date.now() - 90 * 86400000), 'yyyy-MM-dd')
-  const recent90      = allActivities.filter(a => a.start_time >= ninetyDaysAgo + 'T00:00:00')
+  const recent90      = activities.filter(a => a.start_time >= ninetyDaysAgo + 'T00:00:00')
   const totalActivities = recent90.length
   const totalHours    = Math.round(recent90.reduce((s, a) => s + (a.duration_minutes ?? 0), 0) / 60 * 10) / 10
   const totalDist     = Math.round(recent90.reduce((s, a) => s + (a.distance_km ?? 0), 0))
   const thisWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const thisWeekCount = allActivities.filter(a => a.start_time >= thisWeekStart + 'T00:00:00').length
+  const thisWeekCount = activities.filter(a => a.start_time >= thisWeekStart + 'T00:00:00').length
 
   return (
     <div className="flex flex-col">
       <ActivitiesView
-        allActivities={allActivities}
+        allActivities={activities}
         typeFilter={typeFilter}
         weeklyGoal={WEEKLY_GOAL}
         hrvByDate={hrvByDate}
