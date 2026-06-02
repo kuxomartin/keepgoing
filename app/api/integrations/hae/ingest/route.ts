@@ -357,11 +357,11 @@ function processSleepAnalysis(
       fallAsleepMinutes = Math.max(0, Math.round((sleepStartMs - inBedStartMs) / 60_000))
     }
 
-    // ── Timestamps ─────────────────────────────────────────────────────────
-    const startTime = typeof best.sleepStart === 'string' ? best.sleepStart : null
-    const endTime   = typeof best.sleepEnd   === 'string' ? best.sleepEnd
-                    : typeof best.inBedEnd   === 'string' ? best.inBedEnd
-                    : null
+    // ── Timestamps — normalize to ISO 8601 for reliable DB storage ────────────
+    // Raw HAE: "2026-06-01 21:43:00 +0200" → normalized: "2026-06-01T21:43:00+02:00"
+    const startTime = normalizeHAETimestamp(best.sleepStart)
+    const endTime   = normalizeHAETimestamp(best.sleepEnd)
+                   ?? normalizeHAETimestamp(best.inBedEnd)
 
     // ── sleep_records row ───────────────────────────────────────────────────
     const record: Record<string, unknown> = {

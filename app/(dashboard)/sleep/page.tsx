@@ -7,8 +7,6 @@ import { trendColor } from '@/lib/spark-utils'
 import { SleepTimeRange } from '@/components/sleep/sleep-time-range'
 import { SleepChart } from '@/components/charts/sleep-chart'
 import { SleepArchitectureChart } from '@/components/charts/sleep-architecture-chart'
-import { SleepEfficiencyChart } from '@/components/charts/sleep-efficiency-chart'
-import { WakeCountChart } from '@/components/charts/wake-count-chart'
 import { SleepStageHistoryChart } from '@/components/charts/sleep-stage-history-chart'
 import {
   getSleepVerdict,
@@ -82,21 +80,15 @@ export default async function SleepPage() {
   const latestDate   = latest?.date ?? null
   const records14    = sleepRecords.filter(r => r.date >= d14ago)
 
-  const durationData   = records14.map(r => ({ date: r.date, hours: r.asleep_minutes ? Math.round((r.asleep_minutes / 60) * 10) / 10 : null }))
-  const efficiencyData = records14.map(r => ({ date: r.date, value: r.efficiency_pct ? Math.round(Number(r.efficiency_pct)) : null }))
-  const wakeCountData  = records14.map(r => ({ date: r.date, value: r.wake_count }))
-  const deepData       = records14.map(r => ({ date: r.date, hours: r.deep_minutes ? Math.round((r.deep_minutes / 60) * 10) / 10 : null }))
+  const durationData  = records14.map(r => ({ date: r.date, hours: r.asleep_minutes ? Math.round((r.asleep_minutes / 60) * 10) / 10 : null }))
 
   const durationSpark = records14.map(r => r.asleep_minutes ? r.asleep_minutes / 60 : null).filter((v): v is number => v != null)
   const effSpark      = records14.map(r => r.efficiency_pct ? Number(r.efficiency_pct) : null).filter((v): v is number => v != null)
   const durationTrend = durationSpark.length >= 4 ? trendColor(durationSpark, true) : 'gray'
-  const effTrend      = effSpark.length >= 4 ? trendColor(effSpark, true) : 'gray'
 
-  const avg14Duration  = avg(records14.map(r => r.asleep_minutes ? r.asleep_minutes / 60 : null))
-  const avg14Eff       = avg(effSpark)
-  const avg14Wakes     = avg(records14.map(r => r.wake_count))
-  const avg14Deep      = avg(records14.map(r => r.deep_minutes ? r.deep_minutes / 60 : null))
-  const avg14Hrv       = avg(records14.map(r => r.avg_hrv ? Number(r.avg_hrv) : null))
+  const avg14Duration = avg(records14.map(r => r.asleep_minutes ? r.asleep_minutes / 60 : null))
+  const avg14Eff      = avg(effSpark)
+  const avg14Wakes    = avg(records14.map(r => r.wake_count))
 
   const verdict = getSleepVerdict(latest)
 
@@ -211,6 +203,41 @@ export default async function SleepPage() {
     ? `Nights following late caffeine (after 14:00) are associated with ${patternCaffeineInsight.difference.match(/(\d+) fewer/)?.[1] ?? '?'} fewer minutes of sleep on average.`
     : null
 
+  // ── Section 3 — HRV observation bullets (pre-computed before JSX) ─────────
+  // Build HRV lookup: sleep_record.date = wake-up morning = same date as morning HRV
+  const s3HrvByDate: Record<string, number> = {}
+  for (const m of hmAll30d ?? []) {
+    const r = m as { date: string; hrv_ms: number | string | null }
+    if (r.hrv_ms != null && !s3HrvByDate[r.date]) s3HrvByDate[r.date] = Number(r.hrv_ms)
+  }
+  const s3Pairs = sleepRecords
+    .filter(r => r.asleep_minutes != null && s3HrvByDate[r.date] != null)
+    .map(r => ({ sh: r.asleep_minutes! / 60, hrv: s3HrvByDate[r.date] }))
+
+  const s3Observations: string[] = (() => {
+    const obs: string[] = []
+    const mHrv = (ps: { hrv: number }[]) =>
+      ps.length >= 3 ? Math.round(ps.reduce((s, p) => s + p.hrv, 0) / ps.length) : null
+    const g7    = s3Pairs.filter(p => p.sh >= 7)
+    const g6    = s3Pairs.filter(p => p.sh >= 6 && p.sh < 7)
+    const gSub6 = s3Pairs.filter(p => p.sh < 6)
+    const h7    = mHrv(g7)
+    const h6    = mHrv(g6)
+    const hSub6 = mHrv(gSub6)
+    if (h7    != null) obs.push(`When sleep was ≥7h (n=${g7.length}), avg morning HRV was ${h7} ms.`)
+    if (h6    != null) obs.push(`When sleep was 6–7h (n=${g6.length}), avg morning HRV was ${h6} ms.`)
+    if (hSub6 != null) obs.push(`When sleep was <6h (n=${gSub6.length}), avg morning HRV was ${hSub6} ms.`)
+    if (h7 != null && hSub6 != null) {
+      const diff = h7 - hSub6
+      if (Math.abs(diff) >= 3) obs.push(
+        diff > 0
+          ? `Longer sleep (≥7h) is associated with ${diff} ms higher morning HRV on average.`
+          : `Shorter sleep (<6h) is associated with ${Math.abs(diff)} ms higher HRV — quality or other factors may dominate.`
+      )
+    }
+    return obs
+  })()
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col bg-[#151A20]">
@@ -218,65 +245,71 @@ export default async function SleepPage() {
       {/* ══ ZONE 1 — Hero ════════════════════════════════════════════════════ */}
       <div className="pt-10 pb-10">
         <Container>
-          <div className="flex items-center gap-3 mb-6">
+          {/* Header row: source label + date + verdict */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-8">
             <span className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em]">Sleep</span>
             {latestDate && (
               <span className="text-[10px] text-white/25 uppercase tracking-[0.12em]">
                 — Night ending {format(new Date(latestDate + 'T12:00:00'), 'd MMM yyyy')}
               </span>
             )}
+            {hasData && verdict.key !== 'no_data' && (
+              <span className={cn('text-[10px] font-bold uppercase tracking-[0.14em]', verdictCls(verdict.key))}>
+                · {verdict.text}
+              </span>
+            )}
           </div>
 
           {!hasData ? (
             <div>
-              <h1 className="font-display font-bold text-white/20" style={{ fontSize: '7rem', lineHeight: 0.9, letterSpacing: '-0.03em' }}>
+              <p className="font-display font-bold text-white/20" style={{ fontSize: '5rem', lineHeight: 0.9, letterSpacing: '-0.03em' }}>
                 No data yet.
-              </h1>
+              </p>
               <p className="text-white/30 text-base mt-6 max-w-md">Import your Sleep sheet from Health Auto Export in Settings.</p>
             </div>
           ) : (
             <>
-              <h1
-                className={cn('font-display font-bold mb-10', verdictCls(verdict.key))}
-                style={{ fontSize: 'clamp(3.5rem, 7vw, 7rem)', lineHeight: 0.9, letterSpacing: '-0.03em', maxWidth: '900px' }}
-              >
-                {verdict.text}
-              </h1>
-
               {verdict.facts.length > 0 && (() => {
                 const [first, ...rest] = verdict.facts
                 const validTimes = latest?.start_time && latest?.end_time &&
                   new Date(latest.start_time).getFullYear() >= 2000 &&
                   new Date(latest.end_time).getFullYear() >= 2000
 
+                // Humanise labels for inline display
+                function humanLabel(label: string): string {
+                  if (label === 'Wake count')    return 'wake events'
+                  if (label === 'Avg sleep HRV') return 'sleep HRV'
+                  return label.toLowerCase()
+                }
+
                 return (
-                  <div className="flex flex-wrap gap-x-12 gap-y-6">
-                    {/* Duration — primary, with time window directly below */}
-                    <div>
-                      <div className="font-bold text-white font-mono tabular-nums leading-none" style={{ fontSize: '2.25rem' }}>
-                        {first.value}
-                      </div>
-                      <div className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.14em] mt-2">
-                        {first.label}
-                      </div>
-                      {validTimes && (
-                        <div className="mt-2">
-                          <SleepTimeRange startIso={latest!.start_time!} endIso={latest!.end_time!} />
-                        </div>
-                      )}
+                  <div>
+                    {/* PRIMARY — duration */}
+                    <div
+                      className="font-bold text-white font-mono tabular-nums leading-none"
+                      style={{ fontSize: 'clamp(3.75rem, 8vw, 6rem)', letterSpacing: '-0.025em' }}
+                    >
+                      {first.value}
                     </div>
 
-                    {/* Remaining facts */}
-                    {rest.map(fact => (
-                      <div key={fact.label}>
-                        <div className="font-bold text-white font-mono tabular-nums leading-none" style={{ fontSize: '2.25rem' }}>
-                          {fact.value}
-                        </div>
-                        <div className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.14em] mt-2">
-                          {fact.label}
-                        </div>
+                    {/* SECONDARY — time window (client-rendered local timezone) */}
+                    {validTimes && (
+                      <div className="mt-2">
+                        <SleepTimeRange startIso={latest!.start_time!} endIso={latest!.end_time!} />
                       </div>
-                    ))}
+                    )}
+
+                    {/* TERTIARY — secondary facts inline */}
+                    {rest.length > 0 && (
+                      <div className="flex flex-wrap gap-x-7 gap-y-2 mt-6">
+                        {rest.map(fact => (
+                          <span key={fact.label} className="text-sm text-white/40">
+                            <span className="font-mono font-semibold text-white/65 mr-1">{fact.value}</span>
+                            {humanLabel(fact.label)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )
               })()}
@@ -478,32 +511,25 @@ export default async function SleepPage() {
                   </div>
                 )}
 
-                {/* Efficiency trend (compact, secondary) */}
-                {efficiencyData.some(d => d.value != null) && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                    <div>
-                      <div className="flex items-baseline gap-4 mb-4">
-                        <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Efficiency</p>
-                        <div className="flex gap-4 text-xs text-[#888888]">
-                          {latest?.efficiency_pct != null && (
-                            <span>Last: <span className="font-semibold text-[#E7EDF2]">{Math.round(Number(latest.efficiency_pct))}%</span></span>
-                          )}
-                          {avg14Eff != null && (
-                            <span>Avg: <span className="font-semibold text-[#E7EDF2]">{avg14Eff}%</span></span>
-                          )}
-                        </div>
-                      </div>
-                      <SleepEfficiencyChart data={efficiencyData} unit="%" goodThreshold={85} higherIsBetter chartHeight={160} />
-                    </div>
-                    {wakeCountData.some(d => d.value != null) && (
+                {/* Efficiency & wake count — shown as compact stat row, not charts */}
+                {(latest?.efficiency_pct != null || latest?.wake_count != null || avg14Eff != null) && (
+                  <div className="flex flex-wrap gap-x-10 gap-y-3 pt-2">
+                    {avg14Eff != null && (
                       <div>
-                        <div className="flex items-baseline gap-4 mb-4">
-                          <p className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Wake Count</p>
-                          {avg14Wakes != null && (
-                            <span className="text-xs text-[#888888]">Avg: <span className="font-semibold text-[#E7EDF2]">{avg14Wakes}</span></span>
-                          )}
-                        </div>
-                        <WakeCountChart data={wakeCountData} chartHeight={160} />
+                        <p className="text-[10px] text-[#888888] uppercase tracking-[0.12em] mb-1">Avg efficiency</p>
+                        <p className="font-mono text-lg font-bold text-[#E7EDF2]">{avg14Eff}%</p>
+                      </div>
+                    )}
+                    {latest?.efficiency_pct != null && (
+                      <div>
+                        <p className="text-[10px] text-[#888888] uppercase tracking-[0.12em] mb-1">Last night</p>
+                        <p className="font-mono text-lg font-bold text-[#E7EDF2]">{Math.round(Number(latest.efficiency_pct))}%</p>
+                      </div>
+                    )}
+                    {avg14Wakes != null && (
+                      <div>
+                        <p className="text-[10px] text-[#888888] uppercase tracking-[0.12em] mb-1">Avg wake events</p>
+                        <p className="font-mono text-lg font-bold text-[#E7EDF2]">{avg14Wakes}</p>
                       </div>
                     )}
                   </div>
@@ -608,43 +634,21 @@ export default async function SleepPage() {
 
           {/* ══ SECTION 3 — Next-Day Recovery Effect ═════════════════════════════ */}
           {(() => {
-            const hrvInsight = intelligenceInsights.find(i => i.id === 'sleep-hrv')
+            const hrvInsight    = intelligenceInsights.find(i => i.id === 'sleep-hrv')
             const otherInsights = intelligenceInsights.filter(i => i.id !== 'sleep-hrv')
-            const MIN_PAIRS = 7
-
-            // Pair each sleep record with next-day HRV
-            type HmRow = { date: string; hrv_ms: number | string | null }
-            const hmRows = (hmAll30d ?? []) as HmRow[]
-            const hrvByDate: Record<string, number> = {}
-            for (const r of hmRows) {
-              if (r.hrv_ms != null && !hrvByDate[r.date]) {
-                hrvByDate[r.date] = Number(r.hrv_ms)
-              }
-            }
-            // For each sleep night, get next-day HRV
-            const pairs = sleepRecords
-              .filter(r => r.asleep_minutes != null)
-              .map(r => {
-                const nextDate = format(
-                  new Date(new Date(r.date + 'T12:00:00').getTime() + 86400000),
-                  'yyyy-MM-dd'
-                )
-                const hrv = hrvByDate[nextDate] ?? null
-                return { sleep: r.asleep_minutes! / 60, hrv }
-              })
-              .filter(p => p.hrv != null) as { sleep: number; hrv: number }[]
-
-            const hasSufficientData = pairs.length >= MIN_PAIRS
+            const MIN_PAIRS     = 7
+            // s3Pairs pre-computed above: (sleepHours, morningHRV) using same wake-up date
+            const hasSufficientData = s3Pairs.length >= MIN_PAIRS
 
             return (
               <div className="border-t border-white/[0.06] pt-10 pb-12">
                 <Container>
                   <div className="mb-8">
                     <p className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.18em] mb-1">
-                      Next-Day Recovery Effect
+                      Sleep &amp; Recovery
                     </p>
                     <p className="text-xs text-white/25 mt-1">
-                      Relationship between sleep and next-day HRV. Association only — not causal.
+                      How sleep duration relates to morning HRV in your data. Association only — not causal.
                     </p>
                   </div>
 
@@ -654,22 +658,47 @@ export default async function SleepPage() {
                         More nights needed for reliable pattern detection.
                       </p>
                       <p className="text-xs text-white/20 mt-2">
-                        {pairs.length} night{pairs.length !== 1 ? 's' : ''} with HRV data so far. Need {MIN_PAIRS} to detect a pattern.
+                        {s3Pairs.length} night{s3Pairs.length !== 1 ? 's' : ''} with HRV data so far. Need {MIN_PAIRS} to detect a pattern.
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {/* HRV insight card */}
+
+                      {/* Data observations — always shown when sufficient data */}
+                      {s3Observations.length > 0 && (
+                        <div className="bg-[#272D35] border border-white/[0.06] max-w-2xl">
+                          <div className="px-7 pt-7 pb-4 border-b border-white/[0.06]">
+                            <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.14em]">
+                              From your data — last 30 days
+                            </p>
+                          </div>
+                          <ul className="px-7 py-5 space-y-3">
+                            {s3Observations.map((obs, i) => (
+                              <li key={i} className="flex items-start gap-3">
+                                <span className="text-white/20 flex-shrink-0 mt-0.5 text-sm">—</span>
+                                <span className="text-sm text-white/70 leading-relaxed font-mono">{obs}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="px-7 pb-5">
+                            <p className="text-[10px] text-white/20">
+                              Morning HRV from Apple Health. Pairs: {s3Pairs.length} nights.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Statistical insight card (≥7h vs <7h, if generated) */}
                       {hrvInsight && (
                         <div className="bg-[#272D35] border border-white/[0.06] max-w-2xl">
                           <div className="px-7 pt-7 pb-5 border-b border-white/[0.06]">
-                            <h3 className="font-bold text-white leading-tight" style={{ fontSize: '1.125rem', letterSpacing: '-0.01em' }}>
+                            <h3 className="font-bold text-white leading-tight" style={{ fontSize: '1.0rem', letterSpacing: '-0.01em' }}>
                               {hrvInsight.title}
                             </h3>
-                            <p className="font-mono text-[10px] text-white/30 mt-2">{hrvInsight.comparison}</p>
+                            <p className="font-mono text-[10px] text-white/30 mt-1.5">{hrvInsight.comparison}</p>
                           </div>
                           <div className="px-7 py-5 border-b border-white/[0.06]">
-                            <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1.5">Observed difference</p>
+                            <p className="text-[10px] font-bold text-white/25 uppercase tracking-[0.12em] mb-1.5">Observed</p>
                             <p className="font-bold text-white text-sm">{hrvInsight.difference}</p>
                           </div>
                           <div className="px-7 py-5">
