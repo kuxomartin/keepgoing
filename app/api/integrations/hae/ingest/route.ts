@@ -86,11 +86,23 @@ const WORKOUT_TYPE_MAP: Record<string, string> = {
   HKWorkoutActivityTypeTennis:                        'tennis',
   HKWorkoutActivityTypeBasketball:                    'basketball',
   HKWorkoutActivityTypeOther:                         'other',
-  // Short names (some HAE versions omit the HK prefix)
+  // Short names (some HAE versions omit the HKWorkoutActivityType prefix)
   Walking: 'walking', Running: 'running', Cycling: 'cycling', Hiking: 'hiking',
   Golf: 'golf', Yoga: 'yoga', Mobility: 'mobility', Badminton: 'badminton',
   Swimming: 'swimming', Rowing: 'rowing', Other: 'other',
   TraditionalStrengthTraining: 'strength', FunctionalStrengthTraining: 'strength',
+  // Outdoor / Indoor variants (HAE sometimes uses these without the full HK prefix)
+  OutdoorCycling: 'cycling', IndoorCycling: 'cycling',
+  OutdoorRunning: 'running',  IndoorRunning: 'running',
+  OutdoorWalking: 'walking',  IndoorWalking: 'walking',
+  OutdoorSwimming: 'swimming', PoolSwimming: 'swimming',
+  HIIT: 'hiit', HighIntensityIntervalTraining: 'hiit',
+  CoreTraining: 'strength',   Flexibility: 'mobility',
+  // Full HK names for outdoor/indoor variants
+  HKWorkoutActivityTypeOutdoorCycling: 'cycling',
+  HKWorkoutActivityTypeIndoorCycling:  'cycling',
+  HKWorkoutActivityTypeOutdoorRunning: 'running',
+  HKWorkoutActivityTypeOutdoorWalking: 'walking',
 }
 
 // ── Aggregation helpers ───────────────────────────────────────────────────────
@@ -176,6 +188,22 @@ function getDistanceKm(v: unknown): number | null {
 }
 
 /**
+ * Extract energy as kcal, converting from kJ when units specify it.
+ * HAE sends totalEnergyBurned / activeEnergyBurned in kJ on some devices/locales.
+ * Confirmed: Apple Watch exports 4481 kJ for a 90-min ride (= ~1071 kcal).
+ */
+function getEnergyKcal(v: unknown): number | null {
+  if (v == null) return null
+  const qty = getQty(v)
+  if (qty == null || qty <= 0) return null
+  if (typeof v === 'object' && v !== null && 'units' in v) {
+    const u = ((v as { units?: unknown }).units ?? '').toString().toLowerCase()
+    if (u === 'kj') return Math.round(qty / 4.184)
+  }
+  return Math.round(qty)
+}
+
+/**
  * Normalise a HAE timestamp string to ISO 8601 for DB storage.
  * "2026-06-01 10:00:00 +0200" → "2026-06-01T10:00:00+02:00"
  */
@@ -201,9 +229,26 @@ function processWorkouts(
     const workout = w as Record<string, unknown>
 
     // ── Activity type ─────────────────────────────────────────────────────────
-    const rawType = typeof workout.workoutActivityType === 'string'
-      ? workout.workoutActivityType : ''
-    const activityType = WORKOUT_TYPE_MAP[rawType] ?? 'other'
+    // Try workoutActivityType first, then type (HAE uses both across versions).
+    const rawType =
+      (typeof workout.workoutActivityType === 'string' && workout.workoutActivityType) ||
+      (typeof workout.type === 'string' && workout.type) ||
+      ''
+
+    const activityType = (() => {
+      if (!rawType) return 'other'
+      // 1. Direct match (full HK constant or already-short name)
+      if (WORKOUT_TYPE_MAP[rawType]) return WORKOUT_TYPE_MAP[rawType]
+      // 2. Strip "HKWorkoutActivityType" prefix and retry
+      const stripped = rawType.replace(/^HKWorkoutActivityType/, '')
+      if (WORKOUT_TYPE_MAP[stripped]) return WORKOUT_TYPE_MAP[stripped]
+      // 3. Case-insensitive fallback on the stripped form
+      const lc = stripped.toLowerCase()
+      for (const [key, val] of Object.entries(WORKOUT_TYPE_MAP)) {
+        if (key.replace(/^HKWorkoutActivityType/, '').toLowerCase() === lc) return val
+      }
+      return 'other'
+    })()
 
     // ── Start time — try both 'start' and 'startDate' ─────────────────────────
     const startTime = normalizeHAETimestamp(workout.start)
@@ -240,7 +285,7 @@ function processWorkouts(
 
     // ── Optional metrics ──────────────────────────────────────────────────────
     const distanceKm = getDistanceKm(workout.totalDistance ?? workout.distance)
-    const calories   = getQty(workout.activeEnergyBurned ?? workout.totalEnergyBurned)
+    const calories   = getEnergyKcal(workout.activeEnergyBurned ?? workout.totalEnergyBurned)
     const avgHr      = getQty(workout.avgHeartRate ?? workout.averageHeartRate)
     const maxHr      = getQty(workout.maxHeartRate)
 
