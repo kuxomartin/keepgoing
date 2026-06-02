@@ -317,6 +317,12 @@ export async function POST(request: Request) {
     }
   }
 
+  // ── TEMP: log first sleep_analysis sample for payload format inspection ───
+  if (sleepAnalysisPoints.length > 0) {
+    console.log('[hae/ingest] sleep_analysis first sample:', JSON.stringify(sleepAnalysisPoints[0], null, 2))
+    console.log('[hae/ingest] sleep_analysis total samples:', sleepAnalysisPoints.length)
+  }
+
   // ── 7. Accumulate health metric samples by (date, field) ──────────────────
   const byDate: Record<string, Partial<Record<keyof RowFields, number[]>>> = {}
   let totalSamplesRead = 0
