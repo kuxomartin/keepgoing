@@ -243,7 +243,7 @@ export default async function SleepPage() {
     <div className="flex flex-col bg-[#151A20]">
 
       {/* ══ ZONE 1 — Hero ════════════════════════════════════════════════════ */}
-      <div className="pt-10 pb-10">
+      <div className="pt-14 pb-14">
         <Container>
           {/* Header row: source label + date + verdict */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-8">
@@ -286,16 +286,16 @@ export default async function SleepPage() {
                 return (
                   <div>
                     {/* Metrics row — balanced visual weight across all stats */}
-                    <div className="flex flex-wrap gap-x-10 gap-y-6">
+                    <div className="flex flex-wrap gap-x-12 gap-y-8">
                       {/* Duration — anchor metric, one step larger */}
                       <div>
                         <div
                           className="font-mono font-bold text-white tabular-nums leading-none"
-                          style={{ fontSize: '2.75rem', letterSpacing: '-0.025em' }}
+                          style={{ fontSize: '3.5rem', letterSpacing: '-0.03em' }}
                         >
                           {first.value}
                         </div>
-                        <div className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.14em] mt-2.5">
+                        <div className="text-[11px] font-semibold text-white/25 uppercase tracking-[0.14em] mt-3">
                           {first.label}
                         </div>
                       </div>
@@ -305,11 +305,11 @@ export default async function SleepPage() {
                         <div key={fact.label}>
                           <div
                             className="font-mono font-bold text-white/80 tabular-nums leading-none"
-                            style={{ fontSize: '2.25rem', letterSpacing: '-0.02em' }}
+                            style={{ fontSize: '3rem', letterSpacing: '-0.025em' }}
                           >
                             {fact.value}
                           </div>
-                          <div className="text-[10px] font-semibold text-white/25 uppercase tracking-[0.14em] mt-2.5">
+                          <div className="text-[11px] font-semibold text-white/25 uppercase tracking-[0.14em] mt-3">
                             {humanLabel(fact.label)}
                           </div>
                         </div>
@@ -318,7 +318,7 @@ export default async function SleepPage() {
 
                     {/* Sleep window — beneath the metrics block */}
                     {validTimes && (
-                      <div className="mt-5">
+                      <div className="mt-6">
                         <SleepTimeRange startIso={latest!.start_time!} endIso={latest!.end_time!} />
                       </div>
                     )}
