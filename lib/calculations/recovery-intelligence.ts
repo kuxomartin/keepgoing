@@ -11,7 +11,7 @@ function mean(vals: number[]): number {
 export interface DailyRecovery {
   date: string
   score: number
-  status: 'green' | 'yellow' | 'red'
+  status: 'green' | 'yellow' | 'orange' | 'red'
 }
 
 export function buildDailyRecoveryScores(metrics: HealthMetrics[]): DailyRecovery[] {
@@ -29,39 +29,36 @@ export interface TrainingWindow {
   avoid: string[]
 }
 
-export function getTrainingWindow(score: number, hrvTrend: string): TrainingWindow {
-  if (score >= 82 && (hrvTrend === 'green' || hrvTrend === 'blue')) {
+export function getTrainingWindow(score: number, _hrvTrend: string): TrainingWindow {
+  // ≥85 — Well recovered
+  if (score >= 85) {
     return {
-      recommendation: 'High readiness for intense training.',
-      recommended: ['Hard interval session', 'Long endurance run', 'High-intensity strength work'],
+      recommendation: 'Hard session is appropriate.',
+      recommended: ['Hard interval session', 'Long endurance ride', 'High-intensity strength work'],
       avoid: [],
     }
   }
-  if (score >= 72) {
+  // 70–84 — Moderately recovered
+  if (score >= 70) {
     return {
-      recommendation: 'Hard session is appropriate.',
-      recommended: ['Tempo workout', 'Strength session', 'Moderate intervals'],
+      recommendation: 'Moderate session is appropriate.',
+      recommended: ['Tempo workout', 'Strength session', 'Zone 2 with brief intervals'],
       avoid: ['Maximal all-out efforts'],
     }
   }
-  if (score >= 60) {
-    return {
-      recommendation: 'Moderate training is appropriate.',
-      recommended: ['Zone 2 ride', 'Moderate run', 'Technique and skill work'],
-      avoid: ['Maximal efforts', 'VO2 max intervals'],
-    }
-  }
-  if (score >= 45) {
+  // 55–69 — Recovery limited
+  if (score >= 55) {
     return {
       recommendation: 'Easy aerobic work recommended.',
-      recommended: ['Easy walk or Zone 1 cardio', 'Mobility and stretching', 'Light skills work'],
+      recommended: ['Zone 2 ride or easy run', 'Mobility and stretching', 'Technique work'],
       avoid: ['High-intensity training', 'Strength to failure'],
     }
   }
+  // <55 — Low recovery
   return {
-    recommendation: 'Recovery day recommended.',
+    recommendation: 'Prioritize recovery today.',
     recommended: ['Rest', 'Gentle walk', 'Stretching or yoga'],
-    avoid: ['Structured training', 'Any high-intensity work'],
+    avoid: ['Structured training', 'Any intense effort'],
   }
 }
 
@@ -97,22 +94,20 @@ export function buildDriverCards({
       : null
     const signalType: DriverCard['signalType'] =
       pctChange == null ? 'neutral'
-      : pctChange >= 5 ? 'positive'
+      : pctChange >= 5  ? 'positive'
       : pctChange <= -5 ? 'negative'
       : 'neutral'
     const signal =
-      pctChange == null ? 'No baseline available.'
-      : pctChange >= 10 ? 'Strong positive signal.'
-      : pctChange >= 5 ? 'Positive signal.'
-      : pctChange >= -4 ? 'Neutral signal.'
-      : pctChange >= -10 ? 'Slight negative signal.'
-      : 'Strong negative signal.'
+      pctChange == null           ? 'No baseline available.'
+      : pctChange >= 5            ? 'Above 14-day baseline.'
+      : pctChange >= -4           ? 'At 14-day baseline.'
+      : 'Below 14-day baseline.'
     cards.push({
-      label: 'HRV',
-      value: `${hrvValue} ms`,
+      label:    'HRV',
+      value:    `${hrvValue} ms`,
       subvalue: pctChange != null
-        ? `${pctChange >= 0 ? '+' : ''}${pctChange}% vs 14-day baseline`
-        : avgHrv14d ? `14d avg: ${Math.round(avgHrv14d)} ms` : 'No baseline',
+        ? `${pctChange >= 0 ? '+' : ''}${pctChange}% vs 14-day avg (${avgHrv14d ? Math.round(avgHrv14d) : '—'} ms)`
+        : avgHrv14d ? `14-day avg: ${Math.round(avgHrv14d)} ms` : 'No baseline',
       signal,
       signalType,
     })
@@ -121,25 +116,23 @@ export function buildDriverCards({
   // Sleep card
   {
     const TARGET = 7.5
-    const signalType: DriverCard['signalType'] =
-      sleepH == null ? 'neutral'
-      : sleepH >= TARGET ? 'positive'
-      : sleepH >= 6.5 ? 'neutral'
-      : 'negative'
+    const sleepScore = sleepH != null
+      ? (sleepH >= TARGET ? 'positive' : sleepH >= 7 ? 'neutral' : 'negative')
+      : 'neutral'
+    const signalType: DriverCard['signalType'] = sleepScore as DriverCard['signalType']
     const signal =
-      sleepH == null ? 'No recent data.'
-      : sleepH >= TARGET ? 'Positive signal.'
-      : sleepH >= 7 ? 'Neutral signal.'
-      : sleepH >= 6.5 ? 'Small negative signal.'
-      : 'Negative signal.'
+      sleepH == null     ? 'No recent data.'
+      : sleepH >= TARGET ? 'At target.'
+      : sleepH >= 7      ? 'Slightly below target.'
+      : 'Below target.'
     const diff = sleepH != null ? Math.round(Math.abs(sleepH - TARGET) * 10) / 10 : null
     cards.push({
-      label: 'Sleep',
-      value: sleepH != null ? `${sleepH} h` : '—',
+      label:    'Sleep',
+      value:    sleepH != null ? `${sleepH} h` : '—',
       subvalue: sleepH != null
-        ? (sleepH >= TARGET
-          ? `${diff}h above target`
-          : `target ${TARGET} h`)
+        ? sleepH >= TARGET
+          ? `${diff}h above ${TARGET}h target`
+          : `${TARGET}h target · ${diff}h short`
         : 'No recent sleep data',
       signal,
       signalType,
@@ -150,21 +143,19 @@ export function buildDriverCards({
   {
     const diff = avgScore30d != null ? recoveryScore - Math.round(avgScore30d) : null
     const signalType: DriverCard['signalType'] =
-      avgScore30d == null ? 'neutral'
-      : diff != null && diff >= 5 ? 'positive'
+      avgScore30d == null        ? 'neutral'
+      : diff != null && diff >= 5  ? 'positive'
       : diff != null && diff <= -5 ? 'negative'
       : 'neutral'
     const signal =
-      avgScore30d == null ? 'No personal baseline yet.'
-      : diff != null && diff >= 8 ? 'Well above personal baseline.'
-      : diff != null && diff >= 3 ? 'Above personal baseline.'
-      : diff != null && diff >= -3 ? 'At personal baseline.'
-      : diff != null && diff >= -8 ? 'Below personal baseline.'
-      : 'Well below personal baseline.'
+      avgScore30d == null          ? 'No 30-day average yet.'
+      : diff != null && diff >= 5  ? 'Above 30-day average.'
+      : diff != null && diff >= -4 ? 'At 30-day average.'
+      : 'Below 30-day average.'
     cards.push({
-      label: 'Recovery Score',
-      value: `${recoveryScore} / 100`,
-      subvalue: avgScore30d != null ? `30d avg: ${Math.round(avgScore30d)}` : 'Baseline building',
+      label:    'Recovery Score',
+      value:    `${recoveryScore} / 100`,
+      subvalue: avgScore30d != null ? `30-day avg: ${Math.round(avgScore30d)}` : 'Baseline building',
       signal,
       signalType,
     })

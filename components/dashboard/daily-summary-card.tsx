@@ -94,13 +94,15 @@ export function DailySummaryCard({
   // Recovery labels
   const recoveryLabel =
     !recovery ? '—' :
-    recovery.status === 'green'  ? 'Good' :
-    recovery.status === 'yellow' ? 'Moderate' : 'Low'
+    recovery.status === 'green'  ? 'Well recovered' :
+    recovery.status === 'yellow' ? 'Moderate' :
+    recovery.status === 'orange' ? 'Limited' : 'Low'
 
   const recoveryPillColor =
     !recovery ? 'bg-gray-100 text-gray-400' :
     recovery.status === 'green'  ? 'bg-green-100 text-green-700' :
     recovery.status === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
+    recovery.status === 'orange' ? 'bg-orange-100 text-orange-700' :
                                    'bg-red-100 text-red-700'
 
   // Weight delta

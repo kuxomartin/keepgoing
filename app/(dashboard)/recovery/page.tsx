@@ -66,37 +66,59 @@ function mergeByDate(metrics: HealthMetrics[]): HealthMetrics[] {
 
 const STATUS_CLS = {
   green:  'text-[#16A34A]',
-  yellow: 'text-[#D97706]',
+  yellow: 'text-white',
+  orange: 'text-[#D97706]',
   red:    'text-[#E5173F]',
 } as const
 
-function getHeroHeadline(status: 'green' | 'yellow' | 'red', isCurrentDay: boolean): string {
-  if (isCurrentDay) {
-    return { green: 'Well recovered today.', yellow: 'Moderate recovery today.', red: 'Low recovery today.' }[status]
-  }
-  return { green: 'Well recovered.', yellow: 'Moderate recovery.', red: 'Low recovery.' }[status]
+type HeroStatus = 'green' | 'yellow' | 'orange' | 'red'
+
+function getHeroHeadline(status: HeroStatus, isCurrentDay: boolean): string {
+  const day = isCurrentDay ? ' today.' : '.'
+  return {
+    green:  `Well recovered${day}`,
+    yellow: `Moderately recovered${day}`,
+    orange: `Recovery limited${day}`,
+    red:    `Low recovery${day}`,
+  }[status]
 }
 
 function getRecoveryExplanation(
-  heroStatus: string,
-  hrvTrendKey: string,
+  status: HeroStatus,
+  hrvValue: number | null,
+  avgHrv14d: number | null,
   sleepH: number | null,
 ): string {
-  const improving = hrvTrendKey === 'green'
-  const declining = hrvTrendKey === 'amber' || hrvTrendKey === 'red'
-  const good      = sleepH != null && sleepH >= 7
-  const short     = sleepH != null && sleepH < 6.5
+  const sleepLow = sleepH != null && sleepH < 7
+  const sleepOk  = sleepH != null && sleepH >= 7
+  const hrvLow   = hrvValue != null && avgHrv14d != null && hrvValue < avgHrv14d * 0.97
+  const hrvOk    = hrvValue != null && avgHrv14d != null && hrvValue >= avgHrv14d * 0.97
 
-  if (improving && good)   return 'Your recovery is supported by rising HRV and adequate sleep quality.'
-  if (improving && short)  return 'Recovery is supported by improving HRV despite slightly below-target sleep.'
-  if (improving)           return 'Your recovery is supported by rising HRV.'
-  if (declining && good)   return 'Recovery is limited by declining HRV despite adequate sleep.'
-  if (declining && short)  return 'Recovery is limited by both declining HRV and short sleep duration.'
-  if (declining)           return 'Recovery is limited by a declining HRV trend.'
-  if (heroStatus === 'green' && good) return 'Your recovery is supported by stable HRV and adequate sleep.'
-  if (heroStatus === 'green')  return 'All key recovery signals are within normal range.'
-  if (heroStatus === 'red')    return 'Multiple recovery signals are currently below baseline.'
-  return 'Recovery score reflects current physiological state.'
+  if (status === 'green') {
+    if (sleepOk && hrvOk)  return 'Sleep and HRV are both within target range.'
+    if (sleepOk)           return 'Sleep is adequate. HRV signals are within range.'
+    return 'Key recovery signals are within normal range.'
+  }
+
+  if (status === 'yellow') {
+    if (sleepLow && hrvLow) return 'Recovery is usable, but sleep and HRV are below target.'
+    if (sleepLow)           return 'Recovery is usable. Sleep is below the 7h target.'
+    if (hrvLow)             return 'Recovery is usable. HRV is below the 14-day baseline.'
+    return 'Recovery is at a moderate level. No single signal is significantly suppressed.'
+  }
+
+  if (status === 'orange') {
+    if (sleepLow && hrvLow) return 'Sleep and HRV are both below target. Easy work only.'
+    if (sleepLow)           return 'Sleep is below target. Keep effort low today.'
+    if (hrvLow)             return 'HRV is below the 14-day baseline. Keep effort low today.'
+    return 'Recovery signals indicate limited readiness. Easy aerobic work only.'
+  }
+
+  // red
+  if (sleepLow && hrvLow) return 'Short sleep and suppressed HRV. Rest is the priority.'
+  if (sleepLow)           return 'Sleep was short. Prioritize rest and recovery today.'
+  if (hrvLow)             return 'HRV is significantly below baseline. Rest today.'
+  return 'Multiple recovery signals are suppressed. Prioritize rest.'
 }
 
 const TREND_LABEL: Record<string, { text: string; cls: string }> = {
@@ -193,9 +215,9 @@ export default async function RecoveryPage() {
     : null
 
   // ── Hero values ────────────────────────────────────────────────────────────
-  const heroStatus    = recovery.status as 'green' | 'yellow' | 'red'
+  const heroStatus    = recovery.status as HeroStatus
   const heroHeadline  = getHeroHeadline(heroStatus, isCurrentDay)
-  const heroHeadlineCls = STATUS_CLS[heroStatus] ?? STATUS_CLS.yellow
+  const heroHeadlineCls = STATUS_CLS[heroStatus] ?? STATUS_CLS.orange
   const recentWithSleep = [...metrics14].reverse().find(m => m.sleep_minutes && m.sleep_minutes > 0)
   const sleepH = recentWithSleep?.sleep_minutes
     ? Math.round((recentWithSleep.sleep_minutes / 60) * 10) / 10
@@ -203,7 +225,7 @@ export default async function RecoveryPage() {
   const hrvValue = todayMetrics?.hrv_ms != null ? Math.round(Number(todayMetrics.hrv_ms)) : null
   const rhrValue = todayMetrics?.resting_hr ?? null
 
-  const recoveryExplanation = getRecoveryExplanation(heroStatus, hrvTrendKey, sleepH)
+  const recoveryExplanation = getRecoveryExplanation(heroStatus, hrvValue, avg14dHrv, sleepH)
 
   // ── Intelligence ───────────────────────────────────────────────────────────
   const dailyScores = buildDailyRecoveryScores(metrics30)
@@ -929,7 +951,8 @@ export default async function RecoveryPage() {
                   <p className={cn(
                     'font-display font-bold text-2xl leading-tight mb-2',
                     debugBreakdown.status === 'green'  ? 'text-[#16A34A]'
-                    : debugBreakdown.status === 'yellow' ? 'text-[#D97706]'
+                    : debugBreakdown.status === 'yellow' ? 'text-white'
+                    : debugBreakdown.status === 'orange' ? 'text-[#D97706]'
                     : 'text-[#E5173F]'
                   )}>
                     {debugBreakdown.heroLabel}

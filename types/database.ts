@@ -5,7 +5,7 @@ export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'other'
 export type ConfidenceLevel = 'low' | 'medium' | 'high'
 export type DataSourceStatus = 'active' | 'inactive' | 'error'
 export type ImportStatus = 'success' | 'partial' | 'error'
-export type RecoveryStatus = 'green' | 'yellow' | 'red'
+export type RecoveryStatus = 'green' | 'yellow' | 'orange' | 'red'
 export type SupportedDataType = 'health_metrics' | 'weight_logs' | 'strava_activities' | 'apple_sleep'
 
 export interface Profile {

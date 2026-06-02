@@ -25,7 +25,7 @@ export interface RecoveryDebugBreakdown {
   finalScore:      number
 
   // Status determination
-  status:          'green' | 'yellow' | 'red'
+  status:          'green' | 'yellow' | 'orange' | 'red'
   statusRule:      string
   heroLabel:       string
   isCurrentDay:    boolean
@@ -167,18 +167,24 @@ export function computeRecoveryDebug(
   })
 
   const finalScore = Math.max(0, Math.min(100, running))
-  const status: 'green' | 'yellow' | 'red' =
-    finalScore >= 70 ? 'green' : finalScore >= 45 ? 'yellow' : 'red'
+  const status: 'green' | 'yellow' | 'orange' | 'red' =
+    finalScore >= 85 ? 'green'
+    : finalScore >= 70 ? 'yellow'
+    : finalScore >= 55 ? 'orange'
+    : 'red'
 
   const statusRule =
-    finalScore >= 70 ? `score ${finalScore} ≥ 70 → green`
-    : finalScore >= 45 ? `score ${finalScore} ≥ 45 → yellow`
-    : `score ${finalScore} < 45 → red`
+    finalScore >= 85 ? `score ${finalScore} ≥ 85 → green`
+    : finalScore >= 70 ? `score ${finalScore} ≥ 70 → yellow`
+    : finalScore >= 55 ? `score ${finalScore} ≥ 55 → orange`
+    : `score ${finalScore} < 55 → red`
 
+  const day = isCurrentDay ? ' today.' : '.'
   const heroLabel =
-    status === 'green'  ? (isCurrentDay ? 'Well recovered today.' : 'Well recovered.')
-    : status === 'yellow' ? (isCurrentDay ? 'Moderate recovery today.' : 'Moderate recovery.')
-    : (isCurrentDay ? 'Low recovery today.' : 'Low recovery.')
+    status === 'green'  ? `Well recovered${day}`
+    : status === 'yellow' ? `Moderately recovered${day}`
+    : status === 'orange' ? `Recovery limited${day}`
+    : `Low recovery${day}`
 
   const totalDeductions = sleepDeduction + hrvDeduction + rhrDeduction
 
