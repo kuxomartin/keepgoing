@@ -1,0 +1,105 @@
+/**
+ * Energy Balance computation helpers.
+ * Pure functions — no Supabase, no side effects.
+ */
+
+export interface EnergyBalanceDay {
+  date:    string
+  intake:  number | null   // kcal logged
+  burn:    number | null   // active + resting from Apple Health
+  balance: number | null   // intake − burn (null if either missing)
+}
+
+export interface EnergyBalanceSummary {
+  avgIntake:  number
+  avgBurn:    number
+  avgBalance: number
+  status:     'Surplus' | 'Deficit' | 'Maintenance'
+  sampleDays: number       // days where both intake and burn were present
+}
+
+export interface PatternInsight {
+  key:  string
+  text: string
+}
+
+// ── Build daily rows ──────────────────────────────────────────────────────────
+
+export function computeEnergyBalanceDays(
+  intakeByDate:  Record<string, number>,
+  burnByDate:    Record<string, number>,
+  /** Sorted ascending, must NOT include today */
+  dateRange:     string[],
+): EnergyBalanceDay[] {
+  return dateRange.map(date => {
+    const intake  = intakeByDate[date] ?? null
+    const burn    = burnByDate[date]   ?? null
+    // Only compute balance when both signals exist and are > 0
+    const balance = intake != null && intake > 0 && burn != null && burn > 0
+      ? Math.round(intake - burn)
+      : null
+    return { date, intake: intake && intake > 0 ? Math.round(intake) : null, burn, balance }
+  }).reverse() // newest first for display
+}
+
+// ── Summary ───────────────────────────────────────────────────────────────────
+
+export function computeEnergyBalanceSummary(
+  days:   EnergyBalanceDay[],
+  window: 7 | 14 | 30,
+): EnergyBalanceSummary | null {
+  const slice = days.slice(0, window)
+  const complete = slice.filter(d => d.intake != null && d.burn != null && d.balance != null)
+  if (complete.length < 2) return null
+
+  const avgIntake  = Math.round(complete.reduce((s, d) => s + d.intake!,  0) / complete.length)
+  const avgBurn    = Math.round(complete.reduce((s, d) => s + d.burn!,    0) / complete.length)
+  const avgBalance = Math.round(complete.reduce((s, d) => s + d.balance!, 0) / complete.length)
+
+  const status: EnergyBalanceSummary['status'] =
+    avgBalance >  150 ? 'Surplus'
+    : avgBalance < -150 ? 'Deficit'
+    : 'Maintenance'
+
+  return { avgIntake, avgBurn, avgBalance, status, sampleDays: complete.length }
+}
+
+// ── Pattern insights ──────────────────────────────────────────────────────────
+
+export function computePatternInsights(days: EnergyBalanceDay[]): PatternInsight[] {
+  const insights: PatternInsight[] = []
+  const complete = days.filter(d => d.balance != null)
+  if (complete.length < 3) return []
+
+  // Streak: consecutive surplus days (balance > +100) at the top of the list (newest)
+  let surplusStreak = 0
+  for (const d of complete) {
+    if (d.balance! > 100) surplusStreak++
+    else break
+  }
+  if (surplusStreak >= 3) {
+    insights.push({ key: 'surplus_streak', text: `${surplusStreak} surplus days in a row` })
+  }
+
+  // Streak: consecutive deficit days (balance < -100) at the top
+  let deficitStreak = 0
+  for (const d of complete) {
+    if (d.balance! < -100) deficitStreak++
+    else break
+  }
+  if (deficitStreak >= 3) {
+    insights.push({ key: 'deficit_streak', text: `${deficitStreak} deficit days in a row` })
+  }
+
+  // Average surplus/deficit over all available days
+  if (complete.length >= 5 && surplusStreak < 3 && deficitStreak < 3) {
+    const avg = Math.round(complete.reduce((s, d) => s + d.balance!, 0) / complete.length)
+    if (avg > 200) {
+      insights.push({ key: 'avg_surplus', text: `Average surplus: +${avg} kcal / day` })
+    } else if (avg < -200) {
+      insights.push({ key: 'avg_deficit', text: `Average deficit: ${avg} kcal / day` })
+    }
+  }
+
+  return insights
+}

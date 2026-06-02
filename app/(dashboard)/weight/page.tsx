@@ -7,6 +7,8 @@ import { movingAverage } from '@/lib/calculations/moving-average'
 import type { WeightLog } from '@/types/database'
 import type { WeightChartPoint } from '@/components/charts/weight-chart'
 import { loadPersonalContextSummary } from '@/lib/profile/context-loader'
+import { computeEnergyBalanceDays } from '@/lib/weight/energy-balance'
+import { EnergyBalanceSection } from '@/components/weight/energy-balance-section'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
@@ -55,13 +57,27 @@ function fmtDate(d: string): string {
 export default async function WeightPage() {
   const supabase = await createClient()
 
-  const [{ data: rawLogs }, personalContext] = await Promise.all([
+  const today   = format(new Date(), 'yyyy-MM-dd')
+  const d31ago  = format(subDays(startOfDay(new Date()), 30), 'yyyy-MM-dd')
+
+  const [{ data: rawLogs }, personalContext, { data: foodRaw }, { data: metricsRaw }] = await Promise.all([
     supabase.from('weight_logs')
       .select('*')
       .gte('date', '2026-03-01')
       .order('date', { ascending: true })
       .limit(120),
     loadPersonalContextSummary(supabase),
+    // Energy balance: food intake per day
+    supabase.from('food_logs')
+      .select('date, estimated_calories')
+      .gte('date', d31ago)
+      .lte('date', today),
+    // Energy balance: burn from Apple Health (all sources, we merge below)
+    supabase.from('health_metrics')
+      .select('date, active_energy_kcal, resting_energy_kcal')
+      .gte('date', d31ago)
+      .lte('date', today)
+      .order('date', { ascending: true }),
   ])
 
   const logs: WeightLog[] = rawLogs && rawLogs.length > 0 ? (rawLogs as WeightLog[]) : []
@@ -170,6 +186,39 @@ export default async function WeightPage() {
   }
   const goalDir: 'down' | 'up' | null = goalKg == null || currentKg == null ? null
     : goalKg < currentKg ? 'down' : 'up'
+
+  // ── Energy Balance data ───────────────────────────────────────────────────
+  // Food intake by date
+  const intakeByDate: Record<string, number> = {}
+  for (const row of foodRaw ?? []) {
+    const r = row as { date: string; estimated_calories: number | null }
+    intakeByDate[r.date] = (intakeByDate[r.date] ?? 0) + (r.estimated_calories ?? 0)
+  }
+
+  // Burn by date — take max active + max resting per date across sources
+  const activeByDate:  Record<string, number> = {}
+  const restingByDate: Record<string, number> = {}
+  for (const row of metricsRaw ?? []) {
+    const r = row as { date: string; active_energy_kcal: number | null; resting_energy_kcal: number | null }
+    if (r.active_energy_kcal  != null && r.active_energy_kcal  > (activeByDate[r.date]  ?? 0)) activeByDate[r.date]  = r.active_energy_kcal
+    if (r.resting_energy_kcal != null && r.resting_energy_kcal > (restingByDate[r.date] ?? 0)) restingByDate[r.date] = r.resting_energy_kcal
+  }
+  const burnByDate: Record<string, number> = {}
+  const allDatesWithBurn = new Set([...Object.keys(activeByDate), ...Object.keys(restingByDate)])
+  for (const date of allDatesWithBurn) {
+    const burn = (activeByDate[date] ?? 0) + (restingByDate[date] ?? 0)
+    if (burn > 0) burnByDate[date] = Math.round(burn)
+  }
+
+  // Date range: last 30 completed days (excludes today)
+  const completedDates = Array.from({ length: 30 }, (_, i) =>
+    format(subDays(startOfDay(new Date()), 30 - i), 'yyyy-MM-dd')
+  ).filter(d => d < today)
+
+  const energyBalanceDays = computeEnergyBalanceDays(intakeByDate, burnByDate, completedDates)
+
+  // Today's intake (partial — no burn yet)
+  const todayIntakeKcal = intakeByDate[today] ? Math.round(intakeByDate[today]) : null
 
   return (
     <div className="flex flex-col">
@@ -327,7 +376,19 @@ export default async function WeightPage() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════
-          ZONE 4 — Log (dark)
+          ZONE 4 — Energy Balance
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="bg-[#20252B] border-t border-white/[0.06]">
+        <div className="max-w-[1200px] mx-auto px-6 sm:px-10 lg:px-16 py-10">
+          <EnergyBalanceSection
+            days={energyBalanceDays}
+            todayIntake={todayIntakeKcal}
+          />
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          ZONE 5 — Log (dark)
       ═══════════════════════════════════════════════════════════════════ */}
       <div className="bg-[#20252B]">
         <div className="max-w-[1200px] mx-auto px-6 sm:px-10 lg:px-16 py-10">
