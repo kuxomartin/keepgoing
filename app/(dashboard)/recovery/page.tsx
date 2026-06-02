@@ -33,12 +33,14 @@ const IS_DEV = process.env.NODE_ENV === 'development'
 /**
  * Merges all health_metrics rows for the same date into one record.
  * Different sources hold different fields:
- *   google_sheets       → HRV, steps, energy, resting HR, VO₂ max
- *   google_sheets_sleep → sleep_minutes, deep_sleep_minutes, rem_sleep_minutes
+ *   apple_health        → HRV, steps, energy, resting HR, VO₂ max (HAE direct)
+ *   apple_health_sleep  → sleep_minutes, deep_sleep_minutes, rem_sleep_minutes (HAE direct)
+ *   google_sheets       → HRV, steps, energy, resting HR, VO₂ max (legacy GS)
+ *   google_sheets_sleep → sleep_minutes, deep_sleep_minutes, rem_sleep_minutes (legacy GS)
  */
 function mergeByDate(metrics: HealthMetrics[]): HealthMetrics[] {
   // apple_health = direct HAE ingest (new). google_sheets = legacy GS import. Both coexist safely.
-  const SOURCE_PRIORITY = ['apple_health', 'google_sheets', 'google_sheets_sleep', 'apple_health_export', 'manual', 'mock']
+  const SOURCE_PRIORITY = ['apple_health', 'apple_health_sleep', 'google_sheets', 'google_sheets_sleep', 'apple_health_export', 'manual', 'mock']
   const sorted = [...metrics].sort((a, b) =>
     SOURCE_PRIORITY.indexOf(a.source) - SOURCE_PRIORITY.indexOf(b.source)
   )

@@ -28,6 +28,9 @@ const METRIC_LABELS: Record<string, string> = {
   steps:               'Steps',
   vo2max:              'VO₂ max',
   respiratory_rate:    'Respiratory rate',
+  sleep_minutes:       'Sleep',
+  deep_sleep_minutes:  'Deep Sleep',
+  rem_sleep_minutes:   'REM',
 }
 
 export async function HaeStatusPanel() {
