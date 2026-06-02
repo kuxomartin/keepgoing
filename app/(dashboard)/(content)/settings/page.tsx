@@ -2,7 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { ImportManager } from '@/components/settings/import-manager'
 import { ImportLogTable } from '@/components/settings/import-log-table'
+import { HaeStatusPanel } from '@/components/settings/hae-status-panel'
 import Link from 'next/link'
+import { Suspense } from 'react'
 
 // ── What each import type brings into the app ─────────────────────────────────
 const IMPORTED_METRICS = [
@@ -27,14 +29,34 @@ export default async function SettingsPage() {
 
         <div className="space-y-8">
 
-          {/* Google Sheets / Apple Health */}
+          {/* Health Auto Export — Direct REST API (new) */}
           <div>
-            <p className="text-base font-semibold text-[#E7EDF2] mb-1">
-              Apple Health → Health Auto Export → Google Sheets
-            </p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-base font-semibold text-[#E7EDF2]">
+                Health Auto Export → Direct API
+              </p>
+              <span className="text-[10px] font-bold text-[#16A34A] uppercase tracking-[0.12em]">New</span>
+            </div>
             <p className="text-sm text-[#888888] mb-5">
-              Synced daily at 03:00 and 08:00 UTC. Health Auto Export writes Apple Health data to
-              Google Sheets; KeepGoing reads those sheets and stores them in the database.
+              Apple Health data is sent directly to KeepGoing via the Health Auto Export REST API.
+              No Google Sheets intermediary. Data arrives within seconds of the scheduled automation.
+            </p>
+            <Suspense fallback={<p className="text-xs text-white/20">Loading status…</p>}>
+              <HaeStatusPanel />
+            </Suspense>
+          </div>
+
+          {/* Google Sheets / Apple Health — Legacy */}
+          <div className="border-t border-white/[0.08] pt-6">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-base font-semibold text-[#E7EDF2]">
+                Apple Health → Health Auto Export → Google Sheets
+              </p>
+              <span className="text-[10px] font-bold text-[#888888] uppercase tracking-[0.12em]">Legacy</span>
+            </div>
+            <p className="text-sm text-[#888888] mb-5">
+              Original flow via Google Sheets. Synced daily at 03:00 and 08:00 UTC.
+              Keep enabled while validating the new direct API flow.
             </p>
             <ImportManager />
           </div>

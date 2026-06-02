@@ -37,7 +37,8 @@ const IS_DEV = process.env.NODE_ENV === 'development'
  *   google_sheets_sleep → sleep_minutes, deep_sleep_minutes, rem_sleep_minutes
  */
 function mergeByDate(metrics: HealthMetrics[]): HealthMetrics[] {
-  const SOURCE_PRIORITY = ['google_sheets', 'google_sheets_sleep', 'apple_health_export', 'manual', 'mock']
+  // apple_health = direct HAE ingest (new). google_sheets = legacy GS import. Both coexist safely.
+  const SOURCE_PRIORITY = ['apple_health', 'google_sheets', 'google_sheets_sleep', 'apple_health_export', 'manual', 'mock']
   const sorted = [...metrics].sort((a, b) =>
     SOURCE_PRIORITY.indexOf(a.source) - SOURCE_PRIORITY.indexOf(b.source)
   )

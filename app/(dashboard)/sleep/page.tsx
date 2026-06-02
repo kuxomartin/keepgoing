@@ -109,9 +109,11 @@ export default async function SleepPage() {
     supabase.from('food_logs').select('estimated_calories, eaten_at').eq('date', yesterday),
     supabase.from('activities').select('duration_minutes').gte('start_time', yesterday + 'T00:00:00').lte('start_time', yesterday + 'T23:59:59'),
     supabase.from('daily_checkins').select('digestion, energy').eq('date', yesterday).limit(1),
-    supabase.from('health_metrics').select('hrv_ms, active_energy_kcal, resting_energy_kcal').eq('date', yesterday).eq('source', 'google_sheets').limit(1),
-    // Intelligence queries
-    supabase.from('health_metrics').select('date, hrv_ms, active_energy_kcal, resting_energy_kcal').gte('date', d30ago).lte('date', today).eq('source', 'google_sheets'),
+    // Accept any source — apple_health rows (new) and google_sheets rows (legacy).
+    // When multiple rows exist for the same date, take first non-null value per field.
+    supabase.from('health_metrics').select('hrv_ms, active_energy_kcal, resting_energy_kcal').eq('date', yesterday).order('source', { ascending: true }).limit(5),
+    // Intelligence queries — source-agnostic
+    supabase.from('health_metrics').select('date, hrv_ms, active_energy_kcal, resting_energy_kcal').gte('date', d30ago).lte('date', today).order('date', { ascending: true }).order('source', { ascending: true }),
     supabase.from('coffee_logs').select('date, consumed_at').gte('date', d30ago).lte('date', today),
     supabase.from('food_logs').select('date, estimated_calories').gte('date', d30ago).lte('date', today),
     supabase.from('activities').select('start_time, duration_minutes, avg_hr, activity_type').gte('start_time', d30ago + 'T00:00:00').lte('start_time', today + 'T23:59:59'),
@@ -129,15 +131,34 @@ export default async function SleepPage() {
     const lateMeals      = foodList.filter(f => f.eaten_at && f.eaten_at.slice(11, 13) >= '20')
     const lateMealCalories = lateMeals.reduce((s, f) => s + (f.estimated_calories ?? 0), 0) || null
     const activityMinutes  = (actPrev ?? []).reduce((s, a) => s + (a.duration_minutes ?? 0), 0) || null
-    const hm               = hmPrev?.[0]
-    const estimatedBurn    = hm ? (hm.active_energy_kcal ?? 0) + (hm.resting_energy_kcal ?? 0) || null : null
-    const { data: hmHistory } = await supabase.from('health_metrics').select('hrv_ms').gte('date', d14ago).lte('date', yesterday).eq('source', 'google_sheets')
-    const baselineHrv = avg((hmHistory ?? []).map(r => r.hrv_ms ? Number(r.hrv_ms) : null))
+    // Merge multiple source rows for yesterday into one record (first non-null wins)
+    const hmYday = (hmPrev ?? []).reduce(
+      (acc, r) => {
+        type HmRow = { hrv_ms?: number | string | null; active_energy_kcal?: number | null; resting_energy_kcal?: number | null }
+        const row = r as HmRow
+        if (acc.hrv_ms              == null && row.hrv_ms              != null) acc.hrv_ms              = row.hrv_ms
+        if (acc.active_energy_kcal  == null && row.active_energy_kcal  != null) acc.active_energy_kcal  = row.active_energy_kcal
+        if (acc.resting_energy_kcal == null && row.resting_energy_kcal != null) acc.resting_energy_kcal = row.resting_energy_kcal
+        return acc
+      },
+      {} as { hrv_ms?: number | string | null; active_energy_kcal?: number | null; resting_energy_kcal?: number | null }
+    )
+    const estimatedBurn = hmYday.active_energy_kcal != null || hmYday.resting_energy_kcal != null
+      ? ((hmYday.active_energy_kcal ?? 0) + (hmYday.resting_energy_kcal ?? 0)) || null
+      : null
+    const { data: hmHistory } = await supabase.from('health_metrics').select('hrv_ms, date').gte('date', d14ago).lte('date', yesterday)
+    // Deduplicate hmHistory by date (first non-null HRV per date)
+    const hrvByDateHist: Record<string, number> = {}
+    for (const r of hmHistory ?? []) {
+      const row = r as { date: string; hrv_ms?: number | string | null }
+      if (!hrvByDateHist[row.date] && row.hrv_ms != null) hrvByDateHist[row.date] = Number(row.hrv_ms)
+    }
+    const baselineHrv = avg(Object.values(hrvByDateHist).map(v => v))
     void lastCoffeeTime
     causeCtx = {
       record: latest, lastCoffeeHour, totalCaffeineMg: totalCaffeine, totalCalories,
       estimatedBurnKcal: estimatedBurn, lateMealAfter20h: lateMeals.length > 0,
-      lateMealCalories, activityMinutes, previousDayHrv: hm?.hrv_ms ? Number(hm.hrv_ms) : null,
+      lateMealCalories, activityMinutes, previousDayHrv: hmYday.hrv_ms ? Number(hmYday.hrv_ms) : null,
       baselineHrv, checkinDigestion: checkinPrev?.[0]?.digestion ?? null,
       checkinEnergy: checkinPrev?.[0]?.energy ?? null,
     }
@@ -155,9 +176,12 @@ export default async function SleepPage() {
     const row = f as { date: string; estimated_calories?: number }
     intakeByDate[row.date] = (intakeByDate[row.date] ?? 0) + (row.estimated_calories ?? 0)
   }
+  // Multiple sources may exist per date — take first non-zero burn (ordered by source ASC,
+  // so 'apple_health' arrives before 'google_sheets')
   const burnByDate: Record<string, number> = {}
   for (const m of hmAll30d ?? []) {
     const row = m as { date: string; active_energy_kcal?: number; resting_energy_kcal?: number }
+    if (burnByDate[row.date]) continue  // first non-zero wins
     const burn = (row.active_energy_kcal ?? 0) + (row.resting_energy_kcal ?? 0)
     if (burn > 0) burnByDate[row.date] = burn
   }

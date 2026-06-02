@@ -20,11 +20,15 @@ export default async function ActivitiesPage({ searchParams }: PageProps) {
 
   const [{ data: rawActivities }, { data: healthRaw }] = await Promise.all([
     supabase.from('activities').select('*').order('start_time', { ascending: false }).limit(500),
+    // No source filter — accept google_sheets, apple_health, and any future source.
+    // When multiple rows exist for the same date (multiple sources), we take the
+    // first non-null value per field via the loop below.
     supabase.from('health_metrics')
       .select('date, hrv_ms, active_energy_kcal')
       .gte('date', date400ago)
       .lte('date', today)
-      .eq('source', 'google_sheets'),
+      .order('date', { ascending: true })
+      .order('source', { ascending: true }),
   ])
 
   const allActivities: Activity[] =
