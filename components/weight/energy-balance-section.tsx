@@ -185,7 +185,8 @@ export function EnergyBalanceSection({ days, todayIntake }: Props) {
                 key={day.date}
                 className={cn(
                   'border-b border-white/[0.04] transition-colors hover:bg-white/[0.02]',
-                  i % 2 === 0 ? '' : 'bg-white/[0.01]'
+                  i % 2 === 0 ? '' : 'bg-white/[0.01]',
+                  day.isPartial ? 'opacity-60' : '',
                 )}
               >
                 <td className="py-2.5 pr-4 font-mono text-xs text-white/40 whitespace-nowrap">
@@ -194,14 +195,24 @@ export function EnergyBalanceSection({ days, todayIntake }: Props) {
                 <td className="py-2.5 px-3 font-mono text-xs text-right text-white/55 tabular-nums">
                   {fmtKcal(day.intake)}
                 </td>
-                <td className="py-2.5 px-3 font-mono text-xs text-right text-white/55 tabular-nums">
-                  {fmtKcal(day.burn)}
+                <td className="py-2.5 px-3 font-mono text-xs text-right tabular-nums">
+                  {day.burn != null ? (
+                    <span className={day.isPartial ? 'text-white/30' : 'text-white/55'}>
+                      {day.isPartial ? '~' : ''}{fmtKcal(day.burn)}
+                      {day.isPartial && (
+                        <span className="ml-1.5 text-[9px] text-white/25 uppercase tracking-wider font-sans">partial</span>
+                      )}
+                      {!day.isPartial && day.usedWorkoutFallback && (
+                        <span className="ml-1.5 text-[9px] text-white/25 uppercase tracking-wider font-sans">w</span>
+                      )}
+                    </span>
+                  ) : '—'}
                 </td>
                 <td className={cn(
                   'py-2.5 pl-3 font-mono text-xs text-right tabular-nums font-semibold',
-                  balanceCls(day.balance)
+                  day.isPartial ? 'text-white/20 italic' : balanceCls(day.balance),
                 )}>
-                  {fmtBalance(day.balance)}
+                  {day.isPartial ? 'partial' : fmtBalance(day.balance)}
                 </td>
               </tr>
             ))}
@@ -211,9 +222,10 @@ export function EnergyBalanceSection({ days, todayIntake }: Props) {
 
       {/* Footer note */}
       <p className="font-mono text-[10px] text-white/15 mt-4 leading-relaxed">
-        Burn = active energy + resting energy from Apple Health.
-        Days with no intake logged show — for intake.
-        Balance is only computed when both values are available.
+        Burn = resting energy + MAX(active energy, workout calories) from Apple Health.
+        &ldquo;~partial&rdquo; — resting energy &lt; 500 kcal; HAE snapshot captured before day completed.
+        &ldquo;w&rdquo; — workout calories used as active energy (health data was lower).
+        Balance excluded for partial days.
       </p>
     </div>
   )

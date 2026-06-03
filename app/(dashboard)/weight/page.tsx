@@ -60,7 +60,7 @@ export default async function WeightPage() {
   const today   = format(new Date(), 'yyyy-MM-dd')
   const d31ago  = format(subDays(startOfDay(new Date()), 30), 'yyyy-MM-dd')
 
-  const [{ data: rawLogs }, personalContext, { data: foodRaw }, { data: metricsRaw }] = await Promise.all([
+  const [{ data: rawLogs }, personalContext, { data: foodRaw }, { data: metricsRaw }, { data: activitiesRaw }] = await Promise.all([
     supabase.from('weight_logs')
       .select('*')
       .gte('date', '2026-03-01')
@@ -78,6 +78,13 @@ export default async function WeightPage() {
       .gte('date', d31ago)
       .lte('date', today)
       .order('date', { ascending: true }),
+    // Workout calories — used as fallback when health_metrics active energy is a
+    // partial-day snapshot (HAE ran before the workout was logged to HealthKit).
+    supabase.from('activities')
+      .select('start_time, calories')
+      .gte('start_time', d31ago + 'T00:00:00')
+      .lte('start_time', today + 'T23:59:59')
+      .not('calories', 'is', null),
   ])
 
   const logs: WeightLog[] = rawLogs && rawLogs.length > 0 ? (rawLogs as WeightLog[]) : []
@@ -195,7 +202,24 @@ export default async function WeightPage() {
     intakeByDate[r.date] = (intakeByDate[r.date] ?? 0) + (r.estimated_calories ?? 0)
   }
 
-  // Burn by date — take max active + max resting per date across sources
+  // ── Activity calories per date (workout fallback for active energy) ──────────
+  // When Apple Health's active_energy_kcal is a partial-day snapshot (HAE ran
+  // before the workout was accumulated into HealthKit), use workout calories
+  // as the active energy component instead.
+  const activityCalsByDate: Record<string, number> = {}
+  for (const a of activitiesRaw ?? []) {
+    const row  = a as { start_time: string; calories: number | null }
+    const date = row.start_time.slice(0, 10)
+    if (row.calories != null && row.calories > 0)
+      activityCalsByDate[date] = (activityCalsByDate[date] ?? 0) + row.calories
+  }
+
+  // ── Burn by date ─────────────────────────────────────────────────────────────
+  // daily_active = MAX(health_metrics active_energy, sum of workout calories)
+  // daily_burn   = resting_energy + daily_active
+  //
+  // Using MAX (not SUM) avoids double-counting on days where HealthKit already
+  // included workout calories in active_energy_kcal.
   const activeByDate:  Record<string, number> = {}
   const restingByDate: Record<string, number> = {}
   for (const row of metricsRaw ?? []) {
@@ -203,11 +227,26 @@ export default async function WeightPage() {
     if (r.active_energy_kcal  != null && r.active_energy_kcal  > (activeByDate[r.date]  ?? 0)) activeByDate[r.date]  = r.active_energy_kcal
     if (r.resting_energy_kcal != null && r.resting_energy_kcal > (restingByDate[r.date] ?? 0)) restingByDate[r.date] = r.resting_energy_kcal
   }
-  const burnByDate: Record<string, number> = {}
-  const allDatesWithBurn = new Set([...Object.keys(activeByDate), ...Object.keys(restingByDate)])
+  const burnByDate:                 Record<string, number>  = {}
+  const isPartialByDate:            Record<string, boolean> = {}
+  const usedWorkoutFallbackByDate:  Record<string, boolean> = {}
+  const allDatesWithBurn = new Set([
+    ...Object.keys(activeByDate),
+    ...Object.keys(restingByDate),
+    ...Object.keys(activityCalsByDate),
+  ])
   for (const date of allDatesWithBurn) {
-    const burn = (activeByDate[date] ?? 0) + (restingByDate[date] ?? 0)
-    if (burn > 0) burnByDate[date] = Math.round(burn)
+    const hmActive    = activeByDate[date]     ?? 0
+    const workoutCals = activityCalsByDate[date] ?? 0
+    const resting     = restingByDate[date]    ?? 0
+    // MAX: workout calories used only when they exceed what health_metrics reports
+    const activeUsed  = Math.max(hmActive, workoutCals)
+    const burn        = resting + activeUsed
+    if (burn > 0) {
+      burnByDate[date]                = Math.round(burn)
+      isPartialByDate[date]           = resting < 500      // < 500 kcal resting = incomplete day
+      usedWorkoutFallbackByDate[date] = workoutCals > hmActive && workoutCals > 0
+    }
   }
 
   // Date range: last 30 completed days (excludes today)
@@ -215,7 +254,10 @@ export default async function WeightPage() {
     format(subDays(startOfDay(new Date()), 30 - i), 'yyyy-MM-dd')
   ).filter(d => d < today)
 
-  const energyBalanceDays = computeEnergyBalanceDays(intakeByDate, burnByDate, completedDates)
+  const energyBalanceDays = computeEnergyBalanceDays(
+    intakeByDate, burnByDate, completedDates,
+    isPartialByDate, usedWorkoutFallbackByDate,
+  )
 
   // Today's intake (partial — no burn yet)
   const todayIntakeKcal = intakeByDate[today] ? Math.round(intakeByDate[today]) : null

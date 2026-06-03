@@ -4,10 +4,12 @@
  */
 
 export interface EnergyBalanceDay {
-  date:    string
-  intake:  number | null   // kcal logged
-  burn:    number | null   // active + resting from Apple Health
-  balance: number | null   // intake − burn (null if either missing)
+  date:                string
+  intake:              number | null   // kcal logged
+  burn:                number | null   // resting + MAX(active_energy, workout_calories)
+  balance:             number | null   // intake − burn (null if either missing or partial)
+  isPartial:           boolean         // resting energy < 500 kcal → incomplete day snapshot
+  usedWorkoutFallback: boolean         // workout calories > health_metrics active energy → fallback used
 }
 
 export interface EnergyBalanceSummary {
@@ -26,19 +28,33 @@ export interface PatternInsight {
 // ── Build daily rows ──────────────────────────────────────────────────────────
 
 export function computeEnergyBalanceDays(
-  intakeByDate:  Record<string, number>,
-  burnByDate:    Record<string, number>,
+  intakeByDate:               Record<string, number>,
+  burnByDate:                 Record<string, number>,
   /** Sorted ascending, must NOT include today */
-  dateRange:     string[],
+  dateRange:                  string[],
+  isPartialByDate?:           Record<string, boolean>,
+  usedWorkoutFallbackByDate?: Record<string, boolean>,
 ): EnergyBalanceDay[] {
   return dateRange.map(date => {
-    const intake  = intakeByDate[date] ?? null
-    const burn    = burnByDate[date]   ?? null
-    // Only compute balance when both signals exist and are > 0
-    const balance = intake != null && intake > 0 && burn != null && burn > 0
+    const intake              = intakeByDate[date] ?? null
+    const burn                = burnByDate[date]   ?? null
+    const isPartial           = isPartialByDate?.[date]           ?? false
+    const usedWorkoutFallback = usedWorkoutFallbackByDate?.[date] ?? false
+
+    // Don't compute balance when burn data is a partial-day snapshot — the number
+    // is misleading and would corrupt averages.
+    const balance = !isPartial && intake != null && intake > 0 && burn != null && burn > 0
       ? Math.round(intake - burn)
       : null
-    return { date, intake: intake && intake > 0 ? Math.round(intake) : null, burn, balance }
+
+    return {
+      date,
+      intake:              intake && intake > 0 ? Math.round(intake) : null,
+      burn,
+      balance,
+      isPartial,
+      usedWorkoutFallback,
+    }
   }).reverse() // newest first for display
 }
 
